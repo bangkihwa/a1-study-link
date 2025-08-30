@@ -7,7 +7,14 @@ import {
   StarIcon,
   TrendingUpIcon
 } from '@heroicons/react/24/outline';
-import { SUBJECT_LABELS } from '../../types';
+
+const SUBJECT_LABELS: { [key: string]: string } = {
+  physics: '물리학',
+  chemistry: '화학',
+  biology: '생명과학',
+  earth_science: '지구과학',
+  integrated_science: '통합과학',
+};
 
 interface StudentReportData {
   studentInfo: {
@@ -102,7 +109,8 @@ const StudentReportView: React.FC<StudentReportViewProps> = ({
     return '노력 필요';
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('ko-KR');
   };
 

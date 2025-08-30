@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import StudentDashboard from '../components/dashboard/StudentDashboard';
 import TeacherDashboard from '../components/dashboard/TeacherDashboard';
 import AdminDashboardFixed from '../components/admin/AdminDashboardFixed';
+import ParentDashboard from '../components/dashboard/ParentDashboard';
 import EnhancedUserManagement from '../components/admin/EnhancedUserManagement';
 import EnhancedClassManagement from '../components/admin/EnhancedClassManagement';
 import SystemSettings from '../components/admin/SystemSettings';

@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken, requireAdmin } from '../middleware/auth';
+import { authenticateToken, requireAdmin, requireRole } from '../middleware/auth';
 import {
   getPendingUsers,
   approveUser,
@@ -12,7 +12,9 @@ import {
   getAllClasses,
   updateClass,
   createUserValidation,
-  createClassValidation
+  createClassValidation,
+  deleteClass,
+  removeStudentFromClass
 } from '../controllers/adminController';
 
 const router = express.Router();
@@ -31,7 +33,10 @@ router.delete('/users/:userId', deleteUser);
 // 반(클래스) 관리
 router.get('/classes', getAllClasses);
 router.post('/classes', createClassValidation, createClass);
-router.put('/classes/:classId', updateClass);
-router.post('/classes/:classId/students', assignStudentsToClass);
+router.put('/classes/:class_id', authenticateToken, requireRole(['admin']), updateClass);
+router.delete('/classes/:class_id', authenticateToken, requireRole(['admin']), deleteClass);
+
+router.post('/classes/:class_id/students', authenticateToken, requireRole(['admin']), assignStudentsToClass);
+router.delete('/classes/:class_id/students', authenticateToken, requireRole(['admin']), removeStudentFromClass);
 
 export default router;

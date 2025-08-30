@@ -22,54 +22,7 @@ const ProgressTracker: React.FC<ProgressTrackerProps> = ({ studentId }) => {
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
 
   useEffect(() => {
-    // 임시 데이터
-    const mockData: SubjectProgress[] = [
-      {
-        id: 1,
-        subject: '물리학',
-        totalChapters: 12,
-        completedChapters: 8,
-        currentChapter: '제9장: 전기와 자기',
-        lastStudied: '2024-08-24',
-        averageScore: 85,
-        weeklyGoal: 5,
-        weeklyCompleted: 3
-      },
-      {
-        id: 2,
-        subject: '화학',
-        totalChapters: 10,
-        completedChapters: 6,
-        currentChapter: '제7장: 화학 반응',
-        lastStudied: '2024-08-23',
-        averageScore: 92,
-        weeklyGoal: 4,
-        weeklyCompleted: 4
-      },
-      {
-        id: 3,
-        subject: '생명과학',
-        totalChapters: 8,
-        completedChapters: 5,
-        currentChapter: '제6장: 유전',
-        lastStudied: '2024-08-22',
-        averageScore: 78,
-        weeklyGoal: 3,
-        weeklyCompleted: 2
-      },
-      {
-        id: 4,
-        subject: '지구과학',
-        totalChapters: 9,
-        completedChapters: 7,
-        currentChapter: '제8장: 대기와 해양',
-        lastStudied: '2024-08-21',
-        averageScore: 88,
-        weeklyGoal: 4,
-        weeklyCompleted: 3
-      }
-    ];
-    setProgressData(mockData);
+    //
   }, [studentId]);
 
   const getProgressColor = (percentage: number) => {

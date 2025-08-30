@@ -21,8 +21,8 @@ export interface User {
   name: string;
   phone?: string;
   is_approved: boolean;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AuthUser extends User {
@@ -35,7 +35,7 @@ export interface Class {
   subject: SubjectType;
   teacher_id: number;
   description?: string;
-  created_at: Date;
+  created_at: string;
 }
 
 export interface Lecture {
@@ -46,8 +46,8 @@ export interface Lecture {
   teacher_id: number;
   order_index: number;
   is_published: boolean;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface LectureContent {
@@ -58,7 +58,25 @@ export interface LectureContent {
   content_url?: string;
   content_data?: any;
   order_index: number;
-  created_at: Date;
+  created_at: string;
+}
+
+export interface StudentQuestion {
+    id: number;
+    student_id: number;
+    student_name?: string;
+    lecture_id: number;
+    lecture_title?: string;
+    content_id?: number;
+    content_title?: string;
+    question: string;
+    difficulty_level: number;
+    timestamp_in_content?: number;
+    is_resolved: boolean;
+    feedback_text?: string;
+    feedback_date?: string;
+    teacher_name?: string;
+    created_at: string;
 }
 
 export interface JWTPayload {

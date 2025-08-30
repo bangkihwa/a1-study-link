@@ -225,3 +225,50 @@ CREATE TRIGGER update_lectures_updated_at BEFORE UPDATE ON lectures
 
 CREATE TRIGGER update_student_lecture_progress_updated_at BEFORE UPDATE ON student_lecture_progress
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Quizzes and Questions
+CREATE TABLE quizzes (
+    id SERIAL PRIMARY KEY,
+    lecture_id INTEGER REFERENCES lectures(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    quiz_type VARCHAR(50) NOT NULL, -- 'ox', 'multiple_choice'
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE questions (
+    id SERIAL PRIMARY KEY,
+    quiz_id INTEGER REFERENCES quizzes(id) ON DELETE CASCADE,
+    question_text TEXT NOT NULL,
+    question_type VARCHAR(50) NOT NULL, -- 'ox', 'multiple_choice'
+    order_index INTEGER NOT NULL
+);
+
+CREATE TABLE choices (
+    id SERIAL PRIMARY KEY,
+    question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
+    choice_text TEXT NOT NULL,
+    is_correct BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE student_quiz_attempts (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    quiz_id INTEGER REFERENCES quizzes(id) ON DELETE CASCADE,
+    score NUMERIC(5, 2),
+    started_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE student_answers (
+    id SERIAL PRIMARY KEY,
+    attempt_id INTEGER REFERENCES student_quiz_attempts(id) ON DELETE CASCADE,
+    question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
+    chosen_choice_id INTEGER REFERENCES choices(id),
+    is_correct BOOLEAN
+);
+
+CREATE INDEX idx_quizzes_lecture_id ON quizzes(lecture_id);
+CREATE INDEX idx_questions_quiz_id ON questions(quiz_id);
+CREATE INDEX idx_choices_question_id ON choices(question_id);
+CREATE INDEX idx_student_quiz_attempts_student_id ON student_quiz_attempts(student_id);
+CREATE INDEX idx_student_answers_attempt_id ON student_answers(attempt_id);

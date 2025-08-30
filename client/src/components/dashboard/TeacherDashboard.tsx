@@ -3,7 +3,10 @@ import MyClassManagement from '../teacher/MyClassManagement';
 import LectureManagement from '../teacher/LectureManagement';
 import EnhancedStudentFeedbackView from '../teacher/EnhancedStudentFeedbackView';
 import StudentReportGenerator from '../teacher/StudentReportGenerator';
-import { loadStudentFeedbacks } from '../../utils/dataStorage';
+import { loadStudentFeedbacks, loadLectures, loadAssignments, loadQuizzes, loadStudentQuizAttempts } from '../../utils/dataStorage';
+import QuizManagement from '../teacher/QuizManagement';
+import QuizResults from '../teacher/QuizResults';
+import Calendar from '../calendar/Calendar';
 
 interface TeacherDashboardProps {
   user: {
@@ -14,7 +17,7 @@ interface TeacherDashboardProps {
 }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'classes' | 'lectures' | 'feedback' | 'reports'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'classes' | 'lectures' | 'feedback' | 'reports' | 'quizzes' | 'quiz_results' | 'calendar'>('dashboard');
   const [pendingQuestions, setPendingQuestions] = useState(0);
 
   const loadPendingQuestions = () => {
@@ -46,6 +49,38 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       clearInterval(interval);
     };
   }, [user.id]);
+
+  const getCalendarEvents = () => {
+    const events: any[] = [];
+    const lectures = loadLectures().filter(l => l.teacherId === user.id);
+    const quizzes = loadQuizzes().filter(q => lectures.some(l => l.id === q.lecture_id));
+    const assignments = loadAssignments().filter(a => a.teacherId === user.id);
+    const attempts = loadStudentQuizAttempts().filter(a => quizzes.some(q => q.id === a.quiz_id));
+    
+    // Assignments due
+    assignments.forEach(a => {
+      events.push({
+        id: `assign-due-${a.id}`,
+        type: 'assignment',
+        title: `${a.className} 과제 마감`,
+        date: a.dueDate,
+        color: 'bg-red-500'
+      });
+    });
+
+    // Quiz attempts
+    attempts.forEach(a => {
+      events.push({
+        id: `attempt-${a.id}`,
+        type: 'quiz',
+        title: `퀴즈 제출`,
+        date: a.completed_at,
+        color: 'bg-yellow-500'
+      });
+    });
+
+    return events;
+  }
 
   const handleBackToDashboard = () => {
     console.log('Teacher dashboard - going back to dashboard, current view:', currentView);
@@ -87,6 +122,36 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
         teacherName={user.name}
         onBack={handleBackToDashboard}
       />
+    );
+  }
+
+  if (currentView === 'quizzes') {
+    return (
+      <QuizManagement
+        teacherId={user.id}
+        onBack={handleBackToDashboard}
+      />
+    );
+  }
+
+  if (currentView === 'quiz_results') {
+    return (
+      <QuizResults
+        teacherId={user.id}
+        onBack={handleBackToDashboard}
+      />
+    );
+  }
+
+  if (currentView === 'calendar') {
+    return (
+      <div>
+        <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button onClick={handleBackToDashboard} className="btn btn-secondary">← 뒤로</button>
+          <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>📅 전체 일정</h2>
+        </div>
+        <Calendar events={getCalendarEvents()} />
+      </div>
     );
   }
 
@@ -313,6 +378,49 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
               <span style={{ fontSize: '2rem' }}>📊</span>
               <span>성적표 생성</span>
               <small style={{ opacity: 0.8 }}>학생별 학습 보고서 생성</small>
+            </button>
+            <button 
+              onClick={() => setCurrentView('quizzes')}
+              className="btn btn-primary"
+              style={{ 
+                padding: '1rem', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                gap: '0.5rem',
+                background: '#db2777',
+                borderColor: '#db2777'
+              }}
+            >
+              <span style={{ fontSize: '2rem' }}>📝</span>
+              <span>퀴즈 관리</span>
+              <small style={{ opacity: 0.8 }}>강의별 퀴즈 생성 및 관리</small>
+            </button>
+            <button 
+              onClick={() => setCurrentView('quiz_results')}
+              className="btn btn-primary"
+              style={{ 
+                padding: '1rem', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                gap: '0.5rem',
+                background: '#9333ea',
+                borderColor: '#9333ea'
+              }}
+            >
+              <span style={{ fontSize: '2rem' }}>🏆</span>
+              <span>퀴즈 결과</span>
+              <small style={{ opacity: 0.8 }}>학생별 퀴즈 결과 확인</small>
+            </button>
+            <button 
+              onClick={() => setCurrentView('calendar')}
+              className="btn btn-secondary"
+              style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <span style={{ fontSize: '2rem' }}>📅</span>
+              <span>전체 일정</span>
+              <small style={{ opacity: 0.8 }}>과제 마감일, 퀴즈 제출 현황</small>
             </button>
             <button 
               className="btn btn-secondary"

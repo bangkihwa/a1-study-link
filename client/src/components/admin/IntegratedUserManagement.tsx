@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 
 interface User {
   id: number;
@@ -69,15 +70,15 @@ const IntegratedUserManagement: React.FC<IntegratedUserManagementProps> = ({ onB
       if (token) {
         // 서버에서 사용자 목록 가져오기
         try {
-          const response = await fetch('/api/auth/users', {
+          const response = await axios.get('/api/auth/users', {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             }
           });
 
-          if (response.ok) {
-            const data = await response.json();
+          if (response.status === 200) {
+            const data = response.data;
             console.log('Fetched users from server:', data);
             allUsers = data.users.map((user: any) => ({
               ...user,
@@ -96,6 +97,15 @@ const IntegratedUserManagement: React.FC<IntegratedUserManagementProps> = ({ onB
           ...user,
           status: user.status || (user.is_approved === false ? 'pending' : 'active')
         }));
+      }
+
+      if (allUsers.length === 0) { // Fallback to mock data if all else fails
+          allUsers = [
+            { id: 1, username: 'admin', name: '관리자', email: 'admin@school.com', role: 'admin', status: 'active', is_approved: true },
+            { id: 2, username: 'teacher1', name: '김선생', email: 'teacher1@school.com', role: 'teacher', status: 'active', is_approved: true },
+            { id: 3, username: 'student1', name: '홍길동', email: 'student1@school.com', role: 'student', status: 'active', is_approved: true },
+            { id: 4, username: 'parent1', name: '홍길동부모', email: 'parent1@school.com', role: 'parent', status: 'active', is_approved: true },
+          ];
       }
     
     // Load classes
@@ -200,124 +210,66 @@ const IntegratedUserManagement: React.FC<IntegratedUserManagementProps> = ({ onB
       }
 
       // 서버 API 호출
-      const response = await fetch('/api/auth/users', {
-        method: 'POST',
+      const response = await axios.post('/api/auth/users', {
+        username: newUser.username,
+        email: newUser.email || `${newUser.username}@example.com`,
+        password: newUser.password,
+        name: newUser.name,
+        phone: newUser.phone || '',
+        role: newUser.role
+      }, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          username: newUser.username,
-          email: newUser.email || `${newUser.username}@example.com`,
-          password: newUser.password,
-          name: newUser.name,
-          phone: newUser.phone || '',
-          role: newUser.role
-        })
+        }
       });
 
-      if (!response.ok) {
-        const error = await response.json();
+      if (response.status === 201) {
+        const data = response.data;
+        setShowCreateModal(false);
+        setNewUser({
+          id: 0,
+          username: '',
+          name: '',
+          email: '',
+          phone: '',
+          role: 'student',
+          password: '',
+          classIds: []
+        });
+        await loadData();
+        alert(data.message || '사용자가 생성되었습니다.');
+      } else {
+        const error = response.data;
         alert(error.error || '사용자 생성에 실패했습니다.');
-        return;
       }
-
-      const data = await response.json();
-      
-      setShowCreateModal(false);
-      setNewUser({
-        id: 0,
-        username: '',
-        name: '',
-        email: '',
-        phone: '',
-        role: 'student',
-        password: '',
-        classIds: []
-      });
-      await loadData();
-      alert(data.message || '사용자가 생성되었습니다.');
     } catch (error) {
       console.error('Error creating user:', error);
       alert('사용자 생성 중 오류가 발생했습니다.');
     }
   };
 
-  const handleEditUser = () => {
+  const handleEditUser = async () => {
     if (!editingUser) return;
     
-    // Update users
-    const existingUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const userIndex = existingUsers.findIndex((u: User) => u.id === editingUser.id);
-    
-    if (userIndex !== -1) {
-      existingUsers[userIndex] = {
-        ...existingUsers[userIndex],
-        ...editingUser
-      };
-    } else {
-      // User doesn't exist in users, add it
-      existingUsers.push(editingUser);
-    }
-    localStorage.setItem('users', JSON.stringify(existingUsers));
-    
-    // Update students if role is student
-    if (editingUser.role === 'student') {
-      const students = JSON.parse(localStorage.getItem('students') || '[]');
-      const studentIndex = students.findIndex((s: any) => s.id === editingUser.id);
-      
-      const studentData = {
-        id: editingUser.id,
-        username: editingUser.username,
-        name: editingUser.name,
-        email: editingUser.email,
-        phone: editingUser.phone,
-        classIds: editingUser.classIds || [],
-        classNames: editingUser.classIds?.map(id => 
-          classes.find(c => c.id === id)?.name || ''
-        ).filter(n => n),
-        status: 'active'
-      };
-      
-      if (studentIndex !== -1) {
-        students[studentIndex] = studentData;
-      } else {
-        students.push(studentData);
-      }
-      localStorage.setItem('students', JSON.stringify(students));
-      
-      // Update class enrollments
-      updateClassEnrollments(
-        editingUser.id, 
-        editingUser.name, 
-        editingUser.username, 
-        editingUser.classIds || []
-      );
-    }
-    
-    // Update classes if role is teacher
-    if (editingUser.role === 'teacher') {
-      const updatedClasses = classes.map(cls => {
-        const shouldHaveTeacher = editingUser.classIds?.includes(cls.id);
-        const hasTeacher = cls.teacherIds?.includes(editingUser.id);
-        
-        if (shouldHaveTeacher && !hasTeacher) {
-          return { ...cls, teacherIds: [...(cls.teacherIds || []), editingUser.id] };
-        } else if (!shouldHaveTeacher && hasTeacher) {
-          return { ...cls, teacherIds: cls.teacherIds.filter(id => id !== editingUser.id) };
-        }
-        return cls;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.put(`/api/admin/users/${editingUser.id}`, editingUser, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      localStorage.setItem('classes', JSON.stringify(updatedClasses));
+      
+      if (response.status === 200) {
+        alert('사용자 정보가 수정되었습니다.');
+        setShowEditModal(false);
+        setEditingUser(null);
+        loadData();
+      } else {
+        alert('사용자 정보 수정에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert('사용자 정보 수정 중 오류가 발생했습니다.');
     }
-    
-    // Dispatch event
-    window.dispatchEvent(new Event('localStorageChanged'));
-    
-    setShowEditModal(false);
-    setEditingUser(null);
-    loadData();
-    alert('사용자 정보가 수정되었습니다.');
   };
 
   const updateClassEnrollments = (userId: number, name: string, username: string, classIds: number[]) => {
@@ -354,33 +306,25 @@ const IntegratedUserManagement: React.FC<IntegratedUserManagementProps> = ({ onB
     localStorage.setItem('classes', JSON.stringify(updatedClasses));
   };
 
-  const handleDeleteUser = (user: User) => {
+  const handleDeleteUser = async (user: User) => {
     if (!confirm(`정말 ${user.name} 사용자를 삭제하시겠습니까?`)) return;
     
-    // Remove from users
-    const existingUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const updatedUsers = existingUsers.filter((u: User) => u.id !== user.id);
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-    
-    // Remove from students if exists
-    const students = JSON.parse(localStorage.getItem('students') || '[]');
-    const updatedStudents = students.filter((s: any) => s.id !== user.id);
-    localStorage.setItem('students', JSON.stringify(updatedStudents));
-    
-    // Remove from classes
-    const updatedClasses = classes.map(cls => ({
-      ...cls,
-      students: cls.students?.filter((s: any) => s.id !== user.id) || [],
-      studentIds: cls.studentIds?.filter(id => id !== user.id) || [],
-      teacherIds: cls.teacherIds?.filter(id => id !== user.id) || []
-    }));
-    localStorage.setItem('classes', JSON.stringify(updatedClasses));
-    
-    // Dispatch event
-    window.dispatchEvent(new Event('localStorageChanged'));
-    
-    loadData();
-    alert('사용자가 삭제되었습니다.');
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.delete(`/api/admin/users/${user.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.status === 200) {
+        alert('사용자가 삭제되었습니다.');
+        loadData();
+      } else {
+        alert('사용자 삭제에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('사용자 삭제 중 오류가 발생했습니다.');
+    }
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -494,23 +438,21 @@ const IntegratedUserManagement: React.FC<IntegratedUserManagementProps> = ({ onB
                                 return;
                               }
                               
-                              const response = await fetch(`/api/auth/users/${user.id}/approval`, {
-                                method: 'PUT',
+                              const response = await axios.put(`/api/auth/users/${user.id}/approval`, {}, {
                                 headers: {
                                   'Authorization': `Bearer ${token}`,
                                   'Content-Type': 'application/json'
                                 }
                               });
                               
-                              if (!response.ok) {
-                                const error = await response.json();
+                              if (response.status === 200) {
+                                const data = response.data;
+                                alert(data.message || `${user.name}님의 가입을 승인했습니다.`);
+                                await loadData();
+                              } else {
+                                const error = response.data;
                                 alert(error.error || '승인에 실패했습니다.');
-                                return;
                               }
-                              
-                              const data = await response.json();
-                              alert(data.message || `${user.name}님의 가입을 승인했습니다.`);
-                              await loadData();
                             } catch (error) {
                               console.error('Error approving user:', error);
                               alert('사용자 승인 중 오류가 발생했습니다.');

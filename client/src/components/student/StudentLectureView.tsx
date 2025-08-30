@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LectureFeedback from './LectureFeedback';
-import { loadLectures, loadStudentProgress, updateStudentProgress, getStudentProgressForLecture, saveStudentFeedbacks, loadStudentFeedbacks, getNextFeedbackId } from '../../utils/dataStorage';
+import { loadLectures, loadStudentProgress, updateStudentProgress, getStudentProgressForLecture, saveStudentFeedbacks, loadStudentFeedbacks, getNextFeedbackId, loadQuizzes, Quiz } from '../../utils/dataStorage';
+import StudentQuizView from './StudentQuizView';
 
 interface ContentBlock {
   id: string;
@@ -45,6 +46,8 @@ const StudentLectureView: React.FC<StudentLectureViewProps> = ({ onBack, student
   const [questionText, setQuestionText] = useState<string>('');
   const [savedFeedbacks, setSavedFeedbacks] = useState<{[key: number]: any}>({});
   const [lectureQuestions, setLectureQuestions] = useState<any[]>([]);
+  const [lectureQuizzes, setLectureQuizzes] = useState<Quiz[]>([]);
+  const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
 
   useEffect(() => {
     loadStudentLectures();
@@ -83,6 +86,8 @@ const StudentLectureView: React.FC<StudentLectureViewProps> = ({ onBack, student
   // 선택된 강의가 변경될 때 해당 강의의 저장된 피드백 로드
   useEffect(() => {
     if (selectedLecture) {
+      const allQuizzes = loadQuizzes();
+      setLectureQuizzes(allQuizzes.filter(q => q.lecture_id === selectedLecture.id));
       const feedback = savedFeedbacks[selectedLecture.id];
       if (feedback) {
         setSelectedDifficulty(feedback.difficulty || '');
@@ -93,6 +98,8 @@ const StudentLectureView: React.FC<StudentLectureViewProps> = ({ onBack, student
         setSelectedUnderstanding('');
         setQuestionText('');
       }
+    } else {
+      setLectureQuizzes([]);
     }
   }, [selectedLecture, savedFeedbacks]);
 
@@ -365,6 +372,16 @@ const StudentLectureView: React.FC<StudentLectureViewProps> = ({ onBack, student
 
   const subjects = [...new Set(lectures.map(l => l.subject))];
 
+  if (selectedQuiz) {
+    return (
+      <StudentQuizView
+        quiz={selectedQuiz}
+        studentId={studentId}
+        onBack={() => setSelectedQuiz(null)}
+      />
+    );
+  }
+
   if (selectedLecture) {
     const progress = calculateProgress(selectedLecture);
     return (
@@ -550,6 +567,34 @@ const StudentLectureView: React.FC<StudentLectureViewProps> = ({ onBack, student
             )}
           </div>
         </div>
+        
+        {/* 퀴즈 섹션 */}
+        {lectureQuizzes.length > 0 && (
+            <div className="card" style={{ marginTop: '2rem' }}>
+                <div className="card-header">
+                    <div className="card-title">
+                    📝 퀴즈
+                    </div>
+                </div>
+                <div className="card-body">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {lectureQuizzes.map(quiz => (
+                            <div 
+                                key={quiz.id} 
+                                className="flex justify-between items-center p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                                onClick={() => setSelectedQuiz(quiz)}
+                            >
+                                <div>
+                                    <h4 className="font-semibold">{quiz.title}</h4>
+                                    <p className="text-sm text-gray-500">{quiz.quiz_type === 'multiple_choice' ? '객관식' : 'OX 퀴즈'}</p>
+                                </div>
+                                <button className="btn btn-primary btn-sm">퀴즈 풀기</button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        )}
 
         {/* 강의별 질문 (진행중에도 표시) */}
         <div className="card" style={{ marginTop: '2rem' }}>

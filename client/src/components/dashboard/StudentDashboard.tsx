@@ -4,6 +4,7 @@ import StudentQuestionsView from '../student/StudentQuestionsView';
 import ClassBulletinBoard from '../class/ClassBulletinBoard';
 import ParentConfirmationModal from '../student/ParentConfirmationModal';
 import { loadStudentFeedbacks, loadStudentProgress, loadLectures, loadAssignments, toggleAssignmentComplete } from '../../utils/dataStorage';
+import Calendar from '../calendar/Calendar';
 
 interface StudentDashboardProps {
   user: {
@@ -126,6 +127,56 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, stats, recent
       setStudentClasses(enrolledClasses);
     }
   }, [user.id, user.name, currentView]);
+
+  const getCalendarEvents = () => {
+    const events: any[] = [];
+    
+    // Lectures
+    const lectures = loadLectures();
+    const progress = loadStudentProgress().filter(p => p.studentId === user.id);
+    progress.forEach(p => {
+      const lecture = lectures.find(l => l.id === p.lectureId);
+      if (lecture && p.lastActivity) {
+        events.push({
+          id: `lecture-${p.lectureId}`,
+          type: 'lecture',
+          title: lecture.title,
+          date: p.lastActivity,
+          status: 'completed'
+        });
+      }
+    });
+
+    // Assignments
+    const assignments = loadAssignments();
+    assignments.forEach(a => {
+      if(a.dueDate) {
+        events.push({
+          id: `assign-${a.id}`,
+          type: 'assignment',
+          title: a.title,
+          date: a.dueDate,
+          status: a.completedStudents?.includes(user.id) ? 'completed' : new Date(a.dueDate) < new Date() ? 'overdue' : 'pending'
+        });
+      }
+    });
+
+    // Feedbacks
+    const feedbacks = loadStudentFeedbacks().filter(f => f.studentId === user.id);
+    feedbacks.forEach(f => {
+      if (f.answeredAt) {
+        events.push({
+          id: `feedback-${f.id}`,
+          type: 'feedback',
+          title: `${f.lectureTitle} 답변`,
+          date: f.answeredAt,
+          status: 'resolved'
+        });
+      }
+    });
+    
+    return events;
+  };
 
   const getStudyDataForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
@@ -574,266 +625,316 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, stats, recent
         </button>
       </div>
 
-      {/* 학습 현황 카드들 */}
-      <div className="grid grid-4" style={{ gap: '1.5rem', marginBottom: '2rem' }}>
-        <div 
-          className="card"
-          style={{ cursor: 'pointer', transition: 'transform 0.2s ease' }}
-          onClick={handleLectureView}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0px)'}
-        >
-          <div className="card-body">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.5rem' }}>수강 중 강의</p>
-                <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#2563eb' }}>
-                  {(() => {
-                    const lectures = loadLectures();
-                    const progress = loadStudentProgress();
-                    const completedIds = progress
-                      .filter(p => p.studentId === user.id && p.completedBlocks.length === lectures.find(l => l.id === p.lectureId)?.contentBlocks?.length)
-                      .map(p => p.lectureId);
-                    return lectures.filter(l => l.isPublished && !completedIds.includes(l.id)).length;
-                  })()}
-                </p>
-              </div>
-              <div style={{ fontSize: '2rem' }}>📚</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-body">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.5rem' }}>완료 강의</p>
-                <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#16a34a' }}>
-                  {(() => {
-                    const lectures = loadLectures();
-                    const progress = loadStudentProgress();
-                    return progress.filter(p => {
-                      if (p.studentId !== user.id) return false;
-                      const lecture = lectures.find(l => l.id === p.lectureId);
-                      return lecture && p.completedBlocks.length === lecture.contentBlocks.length;
-                    }).length;
-                  })()}
-                </p>
-              </div>
-              <div style={{ fontSize: '2rem' }}>✅</div>
-            </div>
-          </div>
-        </div>
-
-        <div 
-          className="card"
-          style={{ cursor: 'pointer', transition: 'transform 0.2s ease' }}
-          onClick={() => setCurrentView('assignments')}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0px)'}
-        >
-          <div className="card-body">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.5rem' }}>미완료 과제</p>
-                <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#dc2626' }}>
-                  {assignments.filter(a => !a.completedStudents?.includes(user.id)).length}
-                </p>
-              </div>
-              <div style={{ fontSize: '2rem' }}>📝</div>
-            </div>
-          </div>
-        </div>
-
-        <div 
-          className="card"
-          style={{ cursor: 'pointer', transition: 'transform 0.2s ease' }}
-          onClick={() => setCurrentView('questions')}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0px)'}
-        >
-          <div className="card-body">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.5rem' }}>내 질문</p>
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'baseline' }}>
+      {currentView === 'dashboard' && (
+        <>
+          {/* 학습 현황 카드들 */}
+          <div className="grid grid-4" style={{ gap: '1.5rem', marginBottom: '2rem' }}>
+            <div 
+              className="card"
+              style={{ cursor: 'pointer', transition: 'transform 0.2s ease' }}
+              onClick={handleLectureView}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0px)'}
+            >
+              <div className="card-body">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a', marginBottom: '0' }}>
+                    <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.5rem' }}>수강 중 강의</p>
+                    <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#2563eb' }}>
                       {(() => {
-                        const teacherQuestions = JSON.parse(localStorage.getItem('teacherQuestions') || '[]');
-                        return teacherQuestions.filter(
-                          (q: any) => q.studentId === user.id && q.isAnswered
-                        ).length;
+                        const lectures = loadLectures();
+                        const progress = loadStudentProgress();
+                        const completedIds = progress
+                          .filter(p => p.studentId === user.id && p.completedBlocks.length === lectures.find(l => l.id === p.lectureId)?.contentBlocks?.length)
+                          .map(p => p.lectureId);
+                        return lectures.filter(l => l.isPublished && !completedIds.includes(l.id)).length;
                       })()}
                     </p>
-                    <p style={{ fontSize: '0.75rem', color: '#16a34a' }}>답변완료</p>
                   </div>
-                  <div>
-                    <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#d97706', marginBottom: '0' }}>
-                      {(() => {
-                        const teacherQuestions = JSON.parse(localStorage.getItem('teacherQuestions') || '[]');
-                        return teacherQuestions.filter(
-                          (q: any) => q.studentId === user.id && !q.isAnswered
-                        ).length;
-                      })()}
-                    </p>
-                    <p style={{ fontSize: '0.75rem', color: '#d97706' }}>답변대기</p>
-                  </div>
+                  <div style={{ fontSize: '2rem' }}>📚</div>
                 </div>
               </div>
-              <div style={{ fontSize: '2rem' }}>❓</div>
             </div>
-          </div>
-        </div>
-      </div>
 
-      {/* 최근 활동 및 수강 과목 */}
-      <div className="grid grid-2" style={{ gap: '2rem' }}>
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">📚 최근 활동</div>
-          </div>
-          <div className="card-body">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {(() => {
-                // 실제 최근 활동 가져오기
-                const activities: any[] = [];
-                
-                // 학습 진도 활동
-                const progress = loadStudentProgress();
-                const myProgress = progress.filter(p => p.studentId === user.id)
-                  .sort((a, b) => new Date(b.lastActivity || 0).getTime() - new Date(a.lastActivity || 0).getTime())
-                  .slice(0, 2);
-                
-                myProgress.forEach(p => {
-                  const lectures = loadLectures();
-                  const lecture = lectures.find(l => l.id === p.lectureId);
-                  if (lecture) {
-                    activities.push({
-                      type: 'lecture',
-                      title: `${lecture.title} 학습`,
-                      date: p.lastActivity || new Date().toISOString(),
-                      icon: '📚'
-                    });
-                  }
-                });
-                
-                // 질문 활동 및 답변 받은 활동
-                const questions = JSON.parse(localStorage.getItem('teacherQuestions') || '[]');
-                const myQuestions = questions.filter((q: any) => q.studentId === user.id)
-                  .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                  .slice(0, 3);
-                
-                myQuestions.forEach((q: any) => {
-                  if (q.isAnswered && q.answer) {
-                    // 답변 받은 활동
-                    activities.push({
-                      type: 'answer',
-                      title: `"${q.question.substring(0, 20)}..."에 대한 답변 도착`,
-                      date: q.answeredAt || q.createdAt,
-                      icon: '✅'
-                    });
-                  } else {
-                    // 질문한 활동
-                    activities.push({
-                      type: 'question',
-                      title: q.question.substring(0, 30) + (q.question.length > 30 ? '...' : ''),
-                      date: q.createdAt,
-                      icon: '❓'
-                    });
-                  }
-                });
-                
-                // 과제 활동
-                const assignments = loadAssignments();
-                const completedAssignments = assignments.filter(a => 
-                  a.completedStudents?.includes(user.id)
-                ).slice(0, 1);
-                
-                completedAssignments.forEach(a => {
-                  activities.push({
-                    type: 'assignment',
-                    title: `${a.title} 제출`,
-                    date: a.dueDate,
-                    icon: '📝'
-                  });
-                });
-                
-                // 날짜순 정렬 후 최근 3개만
-                const sortedActivities = activities
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .slice(0, 3);
-                
-                if (sortedActivities.length > 0) {
-                  return sortedActivities.map((activity, index) => (
-                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem' }}>
-                      <div style={{ fontSize: '1.5rem' }}>
-                        {activity.icon}
-                      </div>
+            <div className="card">
+              <div className="card-body">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.5rem' }}>완료 강의</p>
+                    <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#16a34a' }}>
+                      {(() => {
+                        const lectures = loadLectures();
+                        const progress = loadStudentProgress();
+                        return progress.filter(p => {
+                          if (p.studentId !== user.id) return false;
+                          const lecture = lectures.find(l => l.id === p.lectureId);
+                          return lecture && p.completedBlocks.length === lecture.contentBlocks.length;
+                        }).length;
+                      })()}
+                    </p>
+                  </div>
+                  <div style={{ fontSize: '2rem' }}>✅</div>
+                </div>
+              </div>
+            </div>
+
+            <div 
+              className="card"
+              style={{ cursor: 'pointer', transition: 'transform 0.2s ease' }}
+              onClick={() => setCurrentView('assignments')}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0px)'}
+            >
+              <div className="card-body">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.5rem' }}>미완료 과제</p>
+                    <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#dc2626' }}>
+                      {assignments.filter(a => !a.completedStudents?.includes(user.id)).length}
+                    </p>
+                  </div>
+                  <div style={{ fontSize: '2rem' }}>📝</div>
+                </div>
+              </div>
+            </div>
+
+            <div 
+              className="card"
+              style={{ cursor: 'pointer', transition: 'transform 0.2s ease' }}
+              onClick={() => setCurrentView('questions')}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0px)'}
+            >
+              <div className="card-body">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.5rem' }}>내 질문</p>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'baseline' }}>
                       <div>
-                        <p style={{ fontWeight: '500', marginBottom: '0.25rem' }}>{activity.title}</p>
-                        <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                        <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a', marginBottom: '0' }}>
                           {(() => {
-                            const date = new Date(activity.date);
-                            const now = new Date();
-                            const diffMs = now.getTime() - date.getTime();
-                            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                            
-                            if (diffHours < 1) return '방금 전';
-                            if (diffHours < 24) return `${diffHours}시간 전`;
-                            if (diffDays < 7) return `${diffDays}일 전`;
-                            return date.toLocaleDateString();
+                            const teacherQuestions = JSON.parse(localStorage.getItem('teacherQuestions') || '[]');
+                            return teacherQuestions.filter(
+                              (q: any) => q.studentId === user.id && q.isAnswered
+                            ).length;
                           })()}
                         </p>
+                        <p style={{ fontSize: '0.75rem', color: '#16a34a' }}>답변완료</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#d97706', marginBottom: '0' }}>
+                          {(() => {
+                            const teacherQuestions = JSON.parse(localStorage.getItem('teacherQuestions') || '[]');
+                            return teacherQuestions.filter(
+                              (q: any) => q.studentId === user.id && !q.isAnswered
+                            ).length;
+                          })()}
+                        </p>
+                        <p style={{ fontSize: '0.75rem', color: '#d97706' }}>답변대기</p>
                       </div>
                     </div>
-                  ));
-                }
-                
-                // 기본 데모 데이터
-                return (
-                  <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: '#f0fdf4', borderRadius: '0.5rem' }}>
-                    <div style={{ fontSize: '1.5rem' }}>📚</div>
-                    <div>
-                      <p style={{ fontWeight: '500', marginBottom: '0.25rem' }}>중등3 물리 - 힘과 운동</p>
-                      <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>오늘 완료</p>
-                    </div>
                   </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: '#fef3c7', borderRadius: '0.5rem' }}>
-                    <div style={{ fontSize: '1.5rem' }}>❓</div>
-                    <div>
-                      <p style={{ fontWeight: '500', marginBottom: '0.25rem' }}>속도와 가속도의 차이점은?</p>
-                      <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>1시간 전 질문</p>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: '#dbeafe', borderRadius: '0.5rem' }}>
-                    <div style={{ fontSize: '1.5rem' }}>📝</div>
-                    <div>
-                      <p style={{ fontWeight: '500', marginBottom: '0.25rem' }}>물리 문제집 1-10번</p>
-                      <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>2시간 전 제출</p>
-                    </div>
-                  </div>
-                </>
-                );
-              })()}
+                  <div style={{ fontSize: '2rem' }}>❓</div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">🎯 수강 과목</div>
-          </div>
-          <div className="card-body">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {studentClasses.length > 0 ? (
-                studentClasses.map((cls: any) => (
-                  <div
-                    key={cls.id}
+          {/* 최근 활동 및 수강 과목 */}
+          <div className="grid grid-2" style={{ gap: '2rem' }}>
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">📚 최근 활동</div>
+              </div>
+              <div className="card-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {(() => {
+                    // 실제 최근 활동 가져오기
+                    const activities: any[] = [];
+                    
+                    // 학습 진도 활동
+                    const progress = loadStudentProgress();
+                    const myProgress = progress.filter(p => p.studentId === user.id)
+                      .sort((a, b) => new Date(b.lastActivity || 0).getTime() - new Date(a.lastActivity || 0).getTime())
+                      .slice(0, 2);
+                    
+                    myProgress.forEach(p => {
+                      const lectures = loadLectures();
+                      const lecture = lectures.find(l => l.id === p.lectureId);
+                      if (lecture) {
+                        activities.push({
+                          type: 'lecture',
+                          title: `${lecture.title} 학습`,
+                          date: p.lastActivity || new Date().toISOString(),
+                          icon: '📚'
+                        });
+                      }
+                    });
+                    
+                    // 질문 활동 및 답변 받은 활동
+                    const questions = JSON.parse(localStorage.getItem('teacherQuestions') || '[]');
+                    const myQuestions = questions.filter((q: any) => q.studentId === user.id)
+                      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .slice(0, 3);
+                    
+                    myQuestions.forEach((q: any) => {
+                      if (q.isAnswered && q.answer) {
+                        // 답변 받은 활동
+                        activities.push({
+                          type: 'answer',
+                          title: `"${q.question.substring(0, 20)}..."에 대한 답변 도착`,
+                          date: q.answeredAt || q.createdAt,
+                          icon: '✅'
+                        });
+                      } else {
+                        // 질문한 활동
+                        activities.push({
+                          type: 'question',
+                          title: q.question.substring(0, 30) + (q.question.length > 30 ? '...' : ''),
+                          date: q.createdAt,
+                          icon: '❓'
+                        });
+                      }
+                    });
+                    
+                    // 과제 활동
+                    const assignments = loadAssignments();
+                    const completedAssignments = assignments.filter(a => 
+                      a.completedStudents?.includes(user.id)
+                    ).slice(0, 1);
+                    
+                    completedAssignments.forEach(a => {
+                      activities.push({
+                        type: 'assignment',
+                        title: `${a.title} 제출`,
+                        date: a.dueDate,
+                        icon: '📝'
+                      });
+                    });
+                    
+                    // 날짜순 정렬 후 최근 3개만
+                    const sortedActivities = activities
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .slice(0, 3);
+                    
+                    if (sortedActivities.length > 0) {
+                      return sortedActivities.map((activity, index) => (
+                        <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem' }}>
+                          <div style={{ fontSize: '1.5rem' }}>
+                            {activity.icon}
+                          </div>
+                          <div>
+                            <p style={{ fontWeight: '500', marginBottom: '0.25rem' }}>{activity.title}</p>
+                            <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                              {(() => {
+                                const date = new Date(activity.date);
+                                const now = new Date();
+                                const diffMs = now.getTime() - date.getTime();
+                                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                
+                                if (diffHours < 1) return '방금 전';
+                                if (diffHours < 24) return `${diffHours}시간 전`;
+                                if (diffDays < 7) return `${diffDays}일 전`;
+                                return date.toLocaleDateString();
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      ));
+                    }
+                    
+                    // 기본 데모 데이터
+                    return (
+                      <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: '#f0fdf4', borderRadius: '0.5rem' }}>
+                        <div style={{ fontSize: '1.5rem' }}>📚</div>
+                        <div>
+                          <p style={{ fontWeight: '500', marginBottom: '0.25rem' }}>중등3 물리 - 힘과 운동</p>
+                          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>오늘 완료</p>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: '#fef3c7', borderRadius: '0.5rem' }}>
+                        <div style={{ fontSize: '1.5rem' }}>❓</div>
+                        <div>
+                          <p style={{ fontWeight: '500', marginBottom: '0.25rem' }}>속도와 가속도의 차이점은?</p>
+                          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>1시간 전 질문</p>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: '#dbeafe', borderRadius: '0.5rem' }}>
+                        <div style={{ fontSize: '1.5rem' }}>📝</div>
+                        <div>
+                          <p style={{ fontWeight: '500', marginBottom: '0.25rem' }}>물리 문제집 1-10번</p>
+                          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>2시간 전 제출</p>
+                        </div>
+                      </div>
+                    </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">🎯 수강 과목</div>
+              </div>
+              <div className="card-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {studentClasses.length > 0 ? (
+                    studentClasses.map((cls: any) => (
+                      <div
+                        key={cls.id}
+                        style={{ 
+                          padding: '1rem', 
+                          border: '1px solid #e5e7eb', 
+                          borderRadius: '0.5rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onClick={() => handleSubjectClick(cls.name)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = '#667eea';
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#e5e7eb';
+                          e.currentTarget.style.transform = 'translateY(0px)';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <h3 style={{ fontWeight: '600' }}>{cls.name}</h3>
+                          <span style={{ fontSize: '1.5rem' }}>
+                            {cls.subject === '물리' ? '⚡' : cls.subject === '화학' ? '🧪' : cls.subject === '생물' ? '🧬' : '📚'}
+                          </span>
+                        </div>
+                        <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.75rem' }}>
+                          담당교사: {cls.teacherNames ? cls.teacherNames.join(', ') : '미배정'}
+                        </p>
+                        {cls.schedule && (
+                          <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.75rem' }}>
+                            수업시간: {cls.schedule}
+                          </p>
+                        )}
+                        <div style={{ background: '#f3f4f6', borderRadius: '9999px', height: '8px', marginBottom: '0.5rem' }}>
+                          <div style={{ 
+                            background: '#16a34a', 
+                            width: `${Math.floor(Math.random() * 40) + 50}%`, 
+                            height: '8px', 
+                            borderRadius: '9999px' 
+                          }}></div>
+                        </div>
+                        <p style={{ fontSize: '0.875rem', color: '#16a34a' }}>
+                          진도율: {Math.floor(Math.random() * 40) + 50}%
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div 
                     style={{ 
                       padding: '1rem', 
                       border: '1px solid #e5e7eb', 
@@ -841,7 +942,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, stats, recent
                       cursor: 'pointer',
                       transition: 'all 0.2s ease'
                     }}
-                    onClick={() => handleSubjectClick(cls.name)}
+                    onClick={() => handleSubjectClick('중등3 물리A반')}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = '#667eea';
                       e.currentTarget.style.transform = 'translateY(-2px)';
@@ -853,68 +954,30 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, stats, recent
                       e.currentTarget.style.boxShadow = 'none';
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <h3 style={{ fontWeight: '600' }}>{cls.name}</h3>
-                      <span style={{ fontSize: '1.5rem' }}>
-                        {cls.subject === '물리' ? '⚡' : cls.subject === '화학' ? '🧪' : cls.subject === '생물' ? '🧬' : '📚'}
-                      </span>
+                    <div style={{ 
+                      padding: '2rem',
+                      textAlign: 'center',
+                      color: '#6b7280'
+                    }}>
+                      <p>수강 중인 과목이 없습니다.</p>
+                      <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>관리자에게 문의해주세요.</p>
                     </div>
-                    <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.75rem' }}>
-                      담당교사: {cls.teacherNames ? cls.teacherNames.join(', ') : '미배정'}
-                    </p>
-                    {cls.schedule && (
-                      <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.75rem' }}>
-                        수업시간: {cls.schedule}
-                      </p>
-                    )}
-                    <div style={{ background: '#f3f4f6', borderRadius: '9999px', height: '8px', marginBottom: '0.5rem' }}>
-                      <div style={{ 
-                        background: '#16a34a', 
-                        width: `${Math.floor(Math.random() * 40) + 50}%`, 
-                        height: '8px', 
-                        borderRadius: '9999px' 
-                      }}></div>
-                    </div>
-                    <p style={{ fontSize: '0.875rem', color: '#16a34a' }}>
-                      진도율: {Math.floor(Math.random() * 40) + 50}%
-                    </p>
                   </div>
-                ))
-              ) : (
-                <div 
-                style={{ 
-                  padding: '1rem', 
-                  border: '1px solid #e5e7eb', 
-                  borderRadius: '0.5rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onClick={() => handleSubjectClick('중등3 물리A반')}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#667eea';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#e5e7eb';
-                  e.currentTarget.style.transform = 'translateY(0px)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                <div style={{ 
-                  padding: '2rem',
-                  textAlign: 'center',
-                  color: '#6b7280'
-                }}>
-                  <p>수강 중인 과목이 없습니다.</p>
-                  <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>관리자에게 문의해주세요.</p>
+                  )}
                 </div>
               </div>
-              )}
             </div>
           </div>
+        </>
+      )}
+
+      {currentView === 'calendar' && (
+        <div className="card">
+          <div className="card-body">
+            <Calendar events={getCalendarEvents()} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 완료한 강의 목록 */}
       <div className="card" style={{ marginTop: '2rem' }}>

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import StudentReportView from './StudentReportView';
+import { loadUsers, loadClasses, loadLectures, loadStudentProgress, loadStudentFeedbacks, loadAssignments } from '../../utils/dataStorage';
 
 interface Student {
   id: number;
@@ -62,29 +64,20 @@ const StudentReportGenerator: React.FC<StudentReportGeneratorProps> = ({ teacher
   }, []);
 
   const loadStudents = () => {
-    // 교사가 담당하는 반의 학생들 로드
-    const classes = JSON.parse(localStorage.getItem('classes') || '[]');
-    const teacherClasses = classes.filter((cls: any) => 
-      cls.teacherIds?.includes(teacherId)
-    );
-    
-    const allStudents = JSON.parse(localStorage.getItem('students') || '[]');
-    const classStudentIds = new Set<number>();
-    
-    teacherClasses.forEach((cls: any) => {
-      if (cls.students) {
-        cls.students.forEach((student: any) => {
-          const studentId = typeof student === 'object' ? student.id : student;
-          classStudentIds.add(studentId);
-        });
-      }
-    });
-    
-    const teacherStudents = allStudents.filter((s: Student) => 
-      classStudentIds.has(s.id)
-    );
-    
-    setStudents(teacherStudents);
+    if (teacherId) {
+      const allClasses = loadClasses();
+      const myClasses = allClasses.filter(c => c.teacherIds?.includes(teacherId));
+      const myClassIds = myClasses.map(c => c.id);
+
+      const allStudents = loadUsers().filter(u => u.role === 'student');
+      const myStudents = allStudents.filter(s => 
+        s.classIds?.some((cid: number) => myClassIds.includes(cid))
+      );
+      setStudents(myStudents);
+    } else {
+      const allStudents = loadUsers().filter(u => u.role === 'student');
+      setStudents(allStudents);
+    }
   };
 
   const generateReport = () => {
@@ -95,65 +88,88 @@ const StudentReportGenerator: React.FC<StudentReportGeneratorProps> = ({ teacher
 
     setIsGenerating(true);
     
-    // 학습 진도 데이터
-    const progress = JSON.parse(localStorage.getItem('studentProgress') || '[]');
-    const studentProgress = progress.filter((p: any) => 
-      p.studentId === selectedStudent.id &&
-      p.completedAt >= startDate &&
-      p.completedAt <= endDate
-    );
+    const student = students.find(s => s.id === selectedStudent.id);
+    if (!student) {
+      setIsGenerating(false);
+      return;
+    }
 
-    // 질문/답변 데이터
-    const questions = JSON.parse(localStorage.getItem('teacherQuestions') || '[]');
-    const studentQuestions = questions.filter((q: any) => 
-      q.studentId === selectedStudent.id &&
-      q.createdAt >= startDate &&
-      q.createdAt <= endDate
-    );
-
-    // 과제 데이터
-    const assignments = JSON.parse(localStorage.getItem('assignments') || '[]');
-    const studentAssignments = assignments.filter((a: any) => {
-      if (a.completedStudents?.includes(selectedStudent.id)) {
-        const submissionDate = a.submissions?.find((s: any) => 
-          s.studentId === selectedStudent.id
-        )?.submittedAt;
-        return submissionDate >= startDate && submissionDate <= endDate;
-      }
-      return false;
+    const allLectures = loadLectures();
+    const allProgress = loadStudentProgress().filter(p => p.studentId === selectedStudent.id);
+    const allAssignments = loadAssignments();
+    const allFeedbacks = loadStudentFeedbacks().filter(f => f.studentId === selectedStudent.id);
+    
+    const periodProgress = allProgress.filter(p => {
+      const activityDate = new Date(p.lastActivity);
+      return activityDate >= new Date(startDate) && activityDate <= new Date(endDate);
     });
 
-    // 강의 데이터
-    const lectures = JSON.parse(localStorage.getItem('lectures') || '[]');
-    const completedLectureIds = studentProgress.map((p: any) => p.lectureId);
-    const completedLectures = lectures.filter((l: any) => 
-      completedLectureIds.includes(l.id)
+    const completedLectures = periodProgress.filter(p => {
+      const lecture = allLectures.find(l => l.id === p.lectureId);
+      return lecture && p.completedBlocks.length === lecture.contentBlocks.length;
+    });
+
+    const studentAssignments = allAssignments.filter(a => 
+      student.classIds?.includes(a.classId)
     );
 
-    // 통계 계산
-    const stats = {
-      totalLectures: completedLectures.length,
-      totalQuestions: studentQuestions.length,
-      answeredQuestions: studentQuestions.filter((q: any) => q.isAnswered).length,
-      totalAssignments: studentAssignments.length,
-      avgScore: calculateAverageScore(studentAssignments),
-      attendanceRate: calculateAttendanceRate(selectedStudent, startDate, endDate),
-      progressRate: calculateProgressRate(studentProgress, lectures)
+    const submittedAssignments = studentAssignments.filter(a =>
+      a.completedStudents?.includes(student.id)
+    );
+    
+    const totalStudyTime = periodProgress.reduce((sum, p) => sum + (p.studyTime || 0), 0);
+    
+    const reportData = {
+      studentInfo: {
+        id: student.id,
+        name: student.name,
+        email: student.email || '',
+        username: student.username,
+      },
+      reportPeriod: {
+        startDate,
+        endDate,
+        generatedAt: new Date().toISOString(),
+      },
+      summary: {
+        overallPerformance: calculateAverageScore(submittedAssignments),
+        lectureCompletionRate: allLectures.length > 0 ? (completedLectures.length / allLectures.length) * 100 : 0,
+        assignmentCompletionRate: studentAssignments.length > 0 ? (submittedAssignments.length / studentAssignments.length) * 100 : 0,
+        totalStudyTime: totalStudyTime,
+        avgFocusScore: 85, // Mock data
+        avgEngagementScore: 90, // Mock data
+      },
+      lectureStats: {
+        total_lectures: allLectures.length,
+        completed_lectures: completedLectures.length,
+        avg_study_time: completedLectures.length > 0 ? totalStudyTime / completedLectures.length : 0,
+        total_study_time: totalStudyTime
+      },
+      subjectProgress: [],
+      questionStats: {
+        total_questions: allFeedbacks.filter(f => f.question).length,
+        resolved_questions: allFeedbacks.filter(f => f.question && f.isAnswered).length,
+        avg_difficulty: 3.5 // Mock
+      },
+      assignmentStats: {
+        total_assignments: studentAssignments.length,
+        submitted_assignments: submittedAssignments.length,
+        graded_assignments: 0, // Mock
+        avg_score: calculateAverageScore(submittedAssignments),
+        overdue_assignments: 0 // Mock
+      },
+      gradeStats: [],
+      analyticsStats: {
+        avg_focus_score: 85,
+        avg_engagement_score: 90,
+        avg_study_duration: completedLectures.length > 0 ? totalStudyTime / completedLectures.length : 0,
+        total_sessions: periodProgress.length,
+      },
+      monthlyActivity: [],
+      recentActivity: [],
     };
-
-    const report = {
-      student: selectedStudent,
-      period: { startDate, endDate },
-      stats,
-      lectures: completedLectures,
-      questions: studentQuestions,
-      assignments: studentAssignments,
-      progress: studentProgress,
-      generatedAt: new Date().toISOString(),
-      generatedBy: teacherName
-    };
-
-    setReportData(report);
+    
+    setReportData(reportData);
     setShowReport(true);
     setIsGenerating(false);
   };
@@ -418,16 +434,16 @@ const StudentReportGenerator: React.FC<StudentReportGeneratorProps> = ({ teacher
               </h2>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <strong>이름:</strong> {reportData?.student.name}
+                  <strong>이름:</strong> {reportData?.studentInfo.name}
                 </div>
                 <div>
-                  <strong>기간:</strong> {reportData?.period.startDate} ~ {reportData?.period.endDate}
+                  <strong>기간:</strong> {reportData?.reportPeriod.startDate} ~ {reportData?.reportPeriod.endDate}
                 </div>
                 <div>
                   <strong>담당 교사:</strong> {reportData?.generatedBy}
                 </div>
                 <div>
-                  <strong>보고서 생성일:</strong> {new Date(reportData?.generatedAt).toLocaleDateString()}
+                  <strong>보고서 생성일:</strong> {new Date(reportData?.reportPeriod.generatedAt).toLocaleDateString()}
                 </div>
               </div>
             </div>
@@ -440,19 +456,19 @@ const StudentReportGenerator: React.FC<StudentReportGeneratorProps> = ({ teacher
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                 <div style={{ padding: '1rem', background: '#eff6ff', borderRadius: '0.5rem', textAlign: 'center' }}>
                   <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#2563eb' }}>
-                    {reportData?.stats.totalLectures}개
+                    {reportData?.lectureStats.completed_lectures}개
                   </div>
                   <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>수강 완료</div>
                 </div>
                 <div style={{ padding: '1rem', background: '#f0fdf4', borderRadius: '0.5rem', textAlign: 'center' }}>
                   <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#16a34a' }}>
-                    {reportData?.stats.attendanceRate}%
+                    {reportData?.summary.attendanceRate}%
                   </div>
                   <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>출석률</div>
                 </div>
                 <div style={{ padding: '1rem', background: '#fef3c7', borderRadius: '0.5rem', textAlign: 'center' }}>
                   <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ca8a04' }}>
-                    {reportData?.stats.avgScore}점
+                    {reportData?.summary.avgScore}점
                   </div>
                   <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>평균 점수</div>
                 </div>
@@ -500,10 +516,10 @@ const StudentReportGenerator: React.FC<StudentReportGeneratorProps> = ({ teacher
               </h2>
               <div style={{ marginBottom: '1rem' }}>
                 <span style={{ marginRight: '2rem' }}>
-                  <strong>총 질문:</strong> {reportData?.stats.totalQuestions}개
+                  <strong>총 질문:</strong> {reportData?.questionStats.total_questions}개
                 </span>
                 <span>
-                  <strong>답변 받은 질문:</strong> {reportData?.stats.answeredQuestions}개
+                  <strong>답변 받은 질문:</strong> {reportData?.questionStats.resolved_questions}개
                 </span>
               </div>
               {reportData?.questions.length > 0 && (

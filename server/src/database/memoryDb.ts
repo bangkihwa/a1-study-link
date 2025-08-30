@@ -1,5 +1,10 @@
 // 메모리 기반 데이터베이스 (PostgreSQL 없이 테스트용)
-import { User, Class, Lecture, LectureContent, StudentQuestion } from '../types';
+import { 
+    User, AuthUser, Class, Lecture, LectureContent, StudentQuestion,
+    UserRole, SubjectType, ContentType 
+} from '../types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface MemoryDatabase {
   users: (User & { password_hash: string })[];
@@ -122,63 +127,22 @@ class MemoryDb {
     return { rows: [newUser], rowCount: 1 };
   }
 
-  // 일반 쿼리 메소드 (기존 코드 호환을 위해)
-  async query(text: string, params: any[] = []) {
-    // 간단한 쿼리 파싱 및 실행
-    console.log('Memory DB Query:', text, params);
-    
-    // 로그인 쿼리 처리
-    if (text.includes('SELECT * FROM users WHERE username = $1')) {
-      return this.findUserByUsername(params[0]);
-    }
-    
-    // 프로필 쿼리 처리
-    if (text.includes('SELECT id, username, email, name, phone, role, is_approved, created_at, updated_at FROM users WHERE id = $1')) {
-      const user = this.db.users.find(u => u.id === params[0]);
-      if (user) {
-        const { password_hash, ...userWithoutPassword } = user;
-        return { rows: [userWithoutPassword], rowCount: 1 };
+  async query(text: string, params: any[] = []): Promise<any> {
+    // This is a mock implementation
+    console.warn(`MemoryDb.query is a mock and does not execute: ${text}`);
+    // This is a mock. You might want to return some predictable data for testing.
+    if (text.startsWith('SELECT id, username, email, name, role, is_approved, created_at FROM users')) {
+      let users = this.db.users.map(u => ({...u}));
+      if (params.length > 0) {
+        // basic filtering for WHERE clauses
+        if (text.includes('WHERE id = $1')) {
+            users = users.filter(u => u.id === params[0]);
+        }
       }
-      return { rows: [], rowCount: 0 };
+      return { rows: users, rowCount: users.length };
     }
-    
-    // 사용자 중복 체크
-    if (text.includes('SELECT id FROM users WHERE username = $1 OR email = $2')) {
-      const existing = this.db.users.find(u => u.username === params[0] || u.email === params[1]);
-      return existing ? { rows: [{ id: existing.id }], rowCount: 1 } : { rows: [], rowCount: 0 };
-    }
-    
-    // 회원가입 쿼리 처리
-    if (text.includes('INSERT INTO users') && text.includes('RETURNING')) {
-      return this.createUser({
-        username: params[0],
-        email: params[1],
-        password_hash: params[2],
-        name: params[3],
-        phone: params[4],
-        role: params[5]
-      });
-    }
-
-    // 학생 대시보드 관련 쿼리들
-    if (text.includes('student_lecture_progress') || text.includes('student_questions') || text.includes('student_assignments')) {
-      // 기본 통계 반환
-      return {
-        rows: [{
-          total_lectures: 10,
-          completed_lectures: 7,
-          pending_questions: 2,
-          total_assignments: 5,
-          submitted_assignments: 4,
-          graded_assignments: 3
-        }],
-        rowCount: 1
-      };
-    }
-
-    // 기본 반환값
     return { rows: [], rowCount: 0 };
   }
 }
 
-export default new MemoryDb();
+export const db = new MemoryDb();

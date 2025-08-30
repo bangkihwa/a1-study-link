@@ -192,139 +192,140 @@ export const createUser = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// 사용자 정보 수정
 export const updateUser = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { name, email, phone, role, classIds } = req.body;
+  
   try {
-    const { userId } = req.params;
-    const { name, phone, email, role } = req.body;
+    const users = loadUsers();
+    const userIndex = users.findIndex(u => u.id === parseInt(id));
 
-    const result = await pool.query(
-      `UPDATE users 
-       SET name = COALESCE($1, name), 
-           phone = COALESCE($2, phone),
-           email = COALESCE($3, email),
-           role = COALESCE($4, role),
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $5 
-       RETURNING id, username, email, name, phone, role, is_approved, updated_at`,
-      [name, phone, email, role, userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({
-      message: '사용자 정보가 수정되었습니다.',
-      user: result.rows[0]
-    });
+    const user = users[userIndex];
+    user.name = name ?? user.name;
+    user.email = email ?? user.email;
+    user.phone = phone ?? user.phone;
+    user.role = role ?? user.role;
+    user.updated_at = new Date().toISOString();
+    
+    saveUsers(users);
+
+    // Update class enrollments if student
+    if (user.role === 'student' && classIds) {
+        const enrollments = loadEnrollments();
+        // Remove existing enrollments
+        const updatedEnrollments = enrollments.filter(e => e.student_id !== user.id);
+        // Add new enrollments
+        classIds.forEach((class_id: number) => {
+            updatedEnrollments.push({
+                id: generateId(),
+                student_id: user.id,
+                class_id,
+                enrolled_at: new Date().toISOString(),
+                status: 'active'
+            });
+        });
+        saveEnrollments(updatedEnrollments);
+    }
+    
+    res.status(200).json({ message: 'User updated successfully', user });
   } catch (error) {
-    console.error('Update user error:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Failed to update user' });
   }
 };
 
-// 사용자 삭제
 export const deleteUser = async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
   try {
-    const { userId } = req.params;
-
-    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    const users = loadUsers();
+    const updatedUsers = users.filter(u => u.id !== parseInt(id));
+    
+    if (users.length === updatedUsers.length) {
+      return res.status(404).json({ error: 'User not found' });
     }
+    
+    saveUsers(updatedUsers);
+    
+    // Also remove from enrollments
+    const enrollments = loadEnrollments();
+    const updatedEnrollments = enrollments.filter(e => e.student_id !== parseInt(id));
+    saveEnrollments(updatedEnrollments);
 
-    res.json({ message: '사용자가 삭제되었습니다.' });
+    res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
-    console.error('Delete user error:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
   }
 };
-
-// 반(클래스) 생성
-export const createClassValidation = [
-  body('name').isLength({ min: 2, max: 100 }).withMessage('반 이름은 2-100자여야 합니다.'),
-  body('subject').isIn([
-    'middle_prep', 'middle_1', 'middle_2', 'middle_3',
-    'integrated_science', 'physics', 'chemistry', 'biology', 'earth_science'
-  ]).withMessage('유효한 과목을 선택하세요.'),
-  body('teacher_id').isInt().withMessage('유효한 교사 ID를 입력하세요.')
-];
 
 export const createClass = async (req: AuthRequest, res: Response) => {
+  const { name, grade, subject, teacher_ids, max_students, schedule, description } = req.body;
+  if (!name || !grade || !subject || !teacher_ids || !Array.isArray(teacher_ids)) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const { name, subject, teacher_id, description } = req.body;
-
-    // 교사 존재 여부 확인
-    const teacherResult = await pool.query(
-      'SELECT id FROM users WHERE id = $1 AND role IN ($2, $3)',
-      [teacher_id, 'teacher', 'admin']
-    );
-
-    if (teacherResult.rows.length === 0) {
-      return res.status(400).json({ error: '유효한 교사를 선택하세요.' });
-    }
-
-    const result = await pool.query(
-      `INSERT INTO classes (name, subject, teacher_id, description) 
-       VALUES ($1, $2, $3, $4) 
-       RETURNING *`,
-      [name, subject, teacher_id, description]
-    );
-
-    res.status(201).json({
-      message: '반이 생성되었습니다.',
-      class: result.rows[0]
-    });
+    const classes = loadClasses();
+    const newClass = {
+      id: generateId(),
+      name,
+      grade,
+      subject,
+      teacherIds: teacher_ids,
+      studentIds: [],
+      max_students: max_students || 20,
+      schedule: schedule || '',
+      description: description || '',
+      created_at: new Date().toISOString()
+    };
+    classes.push(newClass);
+    saveClasses(classes);
+    res.status(201).json({ message: 'Class created successfully', class: newClass });
   } catch (error) {
-    console.error('Create class error:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    res.status(500).json({ error: 'Failed to create class' });
   }
 };
 
-// 반에 학생 배정
+
 export const assignStudentsToClass = async (req: AuthRequest, res: Response) => {
-  try {
-    const { classId } = req.params;
-    const { student_ids } = req.body;
+  const { class_id } = req.params;
+  const { student_ids } = req.body;
 
-    if (!Array.isArray(student_ids) || student_ids.length === 0) {
-      return res.status(400).json({ error: '학생 ID 목록이 필요합니다.' });
-    }
-
-    // 트랜잭션 시작
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      for (const studentId of student_ids) {
-        await client.query(
-          `INSERT INTO class_students (class_id, student_id) 
-           VALUES ($1, $2) 
-           ON CONFLICT (class_id, student_id) DO NOTHING`,
-          [classId, studentId]
-        );
-      }
-
-      await client.query('COMMIT');
-
-      res.json({ message: '학생들이 반에 배정되었습니다.' });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Assign students error:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  if (!Array.isArray(student_ids) || student_ids.length === 0) {
+    return res.status(400).json({ error: '학생 ID 목록이 필요합니다.' });
   }
+
+  // 트랜잭션 시작
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    for (const studentId of student_ids) {
+      await client.query(
+        `INSERT INTO class_students (class_id, student_id) 
+         VALUES ($1, $2) 
+         ON CONFLICT (class_id, student_id) DO NOTHING`,
+        [class_id, studentId]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    res.json({ message: '학생들이 반에 배정되었습니다.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+} catch (error) {
+  console.error('Assign students error:', error);
+  res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+}
 };
 
 // 모든 반 목록 조회
@@ -372,5 +373,45 @@ export const updateClass = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Update class error:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+export const deleteClass = async (req: AuthRequest, res: Response) => {
+  const { class_id } = req.params;
+  try {
+    const classes = loadClasses();
+    const updatedClasses = classes.filter(c => c.id !== parseInt(class_id));
+    if (classes.length === updatedClasses.length) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    saveClasses(updatedClasses);
+
+    // Remove enrollments for this class
+    const enrollments = loadEnrollments();
+    const updatedEnrollments = enrollments.filter(e => e.class_id !== parseInt(class_id));
+    saveEnrollments(updatedEnrollments);
+
+    res.status(200).json({ message: 'Class deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete class' });
+  }
+};
+
+export const removeStudentFromClass = async (req: AuthRequest, res: Response) => {
+  const { class_id } = req.params;
+  const { student_ids } = req.body;
+  if (!student_ids || !Array.isArray(student_ids)) {
+    return res.status(400).json({ error: 'student_ids array is required' });
+  }
+
+  try {
+    const enrollments = loadEnrollments();
+    const updatedEnrollments = enrollments.filter(e => 
+      !(e.class_id === parseInt(class_id) && student_ids.includes(e.student_id))
+    );
+    saveEnrollments(updatedEnrollments);
+    res.status(200).json({ message: 'Students removed from class successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove students' });
   }
 };

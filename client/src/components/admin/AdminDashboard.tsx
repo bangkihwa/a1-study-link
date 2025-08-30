@@ -71,10 +71,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
         setPendingCount(data.users.length);
       } else {
         // 서버 응답 실패 시 파일 데이터 사용
-        const fileResponse = await fetch('/server/data/users.json');
+        const fileResponse = await fetch('/api/auth/users');
         if (fileResponse.ok) {
-          const users = await fileResponse.json();
-          const pending = users.filter((u: any) => !u.is_approved && u.role !== 'admin');
+          const data = await fileResponse.json();
+          const pending = data.users.filter((u: any) => !u.is_approved && u.role !== 'admin');
           setPendingCount(pending.length);
         }
       }
@@ -132,60 +132,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
     }
   };
 
-  const loadAllData = () => {
-    // 반 데이터 (예시)
-    const mockClasses: Class[] = [
-      {
-        id: 1,
-        name: '중등3 물리A반',
-        grade: '중등3',
-        teacherId: 1,
-        teacherName: '김선생',
-        studentCount: 8,
-        students: [
-          { id: 1, name: '김민수', username: 'student1', email: 'kim@example.com', phone: '010-1111-1111', classId: 1, className: '중등3 물리A반' },
-          { id: 2, name: '이지은', username: 'student2', email: 'lee@example.com', phone: '010-2222-2222', classId: 1, className: '중등3 물리A반' },
-          { id: 3, name: '박준호', username: 'student3', email: 'park@example.com', phone: '010-3333-3333', classId: 1, className: '중등3 물리A반' },
-        ]
-      },
-      {
-        id: 2,
-        name: '중등2 화학B반',
-        grade: '중등2',
-        teacherId: 2,
-        teacherName: '이선생',
-        studentCount: 12,
-        students: [
-          { id: 4, name: '최서연', username: 'student4', email: 'choi@example.com', phone: '010-4444-4444', classId: 2, className: '중등2 화학B반' },
-          { id: 5, name: '정현우', username: 'student5', email: 'jung@example.com', phone: '010-5555-5555', classId: 2, className: '중등2 화학B반' },
-        ]
-      },
-      {
-        id: 3,
-        name: '중등1 통합과학',
-        grade: '중등1',
-        teacherId: 3,
-        teacherName: '박선생',
-        studentCount: 5,
-        students: [
-          { id: 6, name: '강민지', username: 'student6', email: 'kang@example.com', phone: '010-6666-6666', classId: 3, className: '중등1 통합과학' },
-        ]
+  const loadAllData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const [classesRes, usersRes] = await Promise.all([
+        fetch('/api/admin/classes', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/quizzes/users/all', { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+
+      if (classesRes.ok) {
+        const classesData = await classesRes.json();
+        setClasses(classesData.classes);
       }
-    ];
 
-    // 교사 데이터 (예시)
-    const mockTeachers: Teacher[] = [
-      { id: 1, name: '김선생', username: 'teacher1', email: 'kim.teacher@example.com', phone: '010-1234-5678', subject: '물리', classes: [1] },
-      { id: 2, name: '이선생', username: 'teacher2', email: 'lee.teacher@example.com', phone: '010-2345-6789', subject: '화학', classes: [2] },
-      { id: 3, name: '박선생', username: 'teacher3', email: 'park.teacher@example.com', phone: '010-3456-7890', subject: '통합과학', classes: [3] },
-    ];
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        const studentList = usersData.users.filter((u: any) => u.role === 'student');
+        const teacherList = usersData.users.filter((u: any) => u.role === 'teacher');
+        setStudents(studentList);
+        setTeachers(teacherList);
+      }
 
-    // 모든 학생 데이터 통합
-    const allStudents = mockClasses.flatMap(c => c.students);
-
-    setClasses(mockClasses);
-    setTeachers(mockTeachers);
-    setStudents(allStudents);
+    } catch(e) {
+      console.error("Failed to load data from server, falling back to mock.", e);
+      // loadMockData(); // Removed loadMockData
+    }
   };
 
   const handleBackToDashboard = () => {

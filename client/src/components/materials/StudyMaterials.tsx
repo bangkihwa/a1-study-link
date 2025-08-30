@@ -14,10 +14,10 @@ interface Material {
 }
 
 interface StudyMaterialsProps {
-  userRole: 'student' | 'teacher' | 'admin';
+  onBack: () => void;
 }
 
-const StudyMaterials: React.FC<StudyMaterialsProps> = ({ userRole }) => {
+const StudyMaterials: React.FC<StudyMaterialsProps> = ({ onBack }) => {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
@@ -27,68 +27,7 @@ const StudyMaterials: React.FC<StudyMaterialsProps> = ({ userRole }) => {
 
   // 임시 데이터
   useEffect(() => {
-    const mockMaterials: Material[] = [
-      {
-        id: 1,
-        title: '물리학 1단원 - 역학적 에너지',
-        subject: '물리학',
-        grade: '고1',
-        type: 'pdf',
-        description: '역학적 에너지 보존 법칙과 관련된 학습 자료입니다.',
-        fileUrl: '/materials/physics_1.pdf',
-        uploadDate: '2024-08-20',
-        teacher: '김인후 선생님',
-        downloads: 45
-      },
-      {
-        id: 2,
-        title: '화학 반응식 문제풀이',
-        subject: '화학',
-        grade: '고2',
-        type: 'exercise',
-        description: '화학 반응식 균형 맞추기 연습 문제입니다.',
-        fileUrl: '/materials/chemistry_ex.pdf',
-        uploadDate: '2024-08-19',
-        teacher: '박진환 선생님',
-        downloads: 32
-      },
-      {
-        id: 3,
-        title: '지구과학 - 태양계의 구성',
-        subject: '지구과학',
-        grade: '고1',
-        type: 'video',
-        description: '태양계 행성들의 특징을 설명하는 동영상 강의입니다.',
-        fileUrl: '/materials/earth_science.mp4',
-        uploadDate: '2024-08-18',
-        teacher: '방기화 선생님',
-        downloads: 58
-      },
-      {
-        id: 4,
-        title: '생명과학 세포 분열 퀴즈',
-        subject: '생명과학',
-        grade: '고2',
-        type: 'quiz',
-        description: '세포 분열 과정을 확인하는 온라인 퀴즈입니다.',
-        uploadDate: '2024-08-17',
-        teacher: '최재준 선생님',
-        downloads: 29
-      },
-      {
-        id: 5,
-        title: '통합과학 1학기 중간고사 대비',
-        subject: '통합과학',
-        grade: '고1',
-        type: 'pdf',
-        description: '1학기 중간고사 범위 총정리 자료입니다.',
-        fileUrl: '/materials/integrated_science.pdf',
-        uploadDate: '2024-08-16',
-        teacher: '김인후 선생님',
-        downloads: 87
-      }
-    ];
-    setMaterials(mockMaterials);
+    //
   }, []);
 
   const filteredMaterials = materials.filter(material => {
@@ -221,14 +160,14 @@ const StudyMaterials: React.FC<StudyMaterialsProps> = ({ userRole }) => {
             />
 
             {/* 업로드 버튼 (교사/관리자만) */}
-            {(userRole === 'teacher' || userRole === 'admin') && (
+            {/* {(userRole === 'teacher' || userRole === 'admin') && (
               <button 
                 onClick={() => setShowUploadModal(true)}
                 className="btn btn-primary"
               >
                 + 자료 업로드
               </button>
-            )}
+            )} */}
           </div>
         </div>
       </div>

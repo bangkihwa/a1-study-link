@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 
 interface Class {
   id: number;
@@ -71,64 +72,46 @@ const EnhancedClassManagement: React.FC<EnhancedClassManagementProps> = ({ onBac
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(loadData, 5000); // Poll for changes
+    return () => clearInterval(interval);
   }, []);
 
-  const loadData = () => {
-    // localStorage에서 데이터 로드
-    const savedClasses = localStorage.getItem('studylink_classes');
-    const savedTeachers = localStorage.getItem('studylink_teachers');
-    const savedStudents = localStorage.getItem('studylink_students');
+  const loadData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const [classesRes, teachersRes, studentsRes] = await Promise.all([
+        axios.get('/api/admin/classes', { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get('/api/quizzes/users/all', { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
 
-    if (savedClasses) {
-      setClasses(JSON.parse(savedClasses));
-    } else {
-      // 초기 데이터
-      const initialClasses: Class[] = [
-        {
-          id: 1,
-          name: '중등3 물리A반',
-          grade: '중등3',
-          subject: '물리',
-          teacherId: 1,
-          teacherName: '김선생',
-          students: [],
-          maxStudents: 20,
-          createdAt: '2024-01-01'
-        },
-        {
-          id: 2,
-          name: '중등2 화학B반',
-          grade: '중등2',
-          subject: '화학',
-          teacherId: 2,
-          teacherName: '이선생',
-          students: [],
-          maxStudents: 20,
-          createdAt: '2024-01-02'
+      const allClasses = classesRes.data.classes || [];
+      const allUsers = teachersRes.data.users || [];
+      
+      const teacherList = allUsers.filter((u: any) => u.role === 'teacher');
+      const studentList = allUsers.filter((u: any) => u.role === 'student');
+
+      // Populate students in each class
+      const populatedClasses = allClasses.map((cls: Class) => {
+        const studentDetails = (cls.studentIds || []).map(studentId => {
+          return studentList.find((s: Student) => s.id === studentId);
+        }).filter(Boolean); // Filter out undefined students
+        return { ...cls, students: studentDetails };
+      });
+      
+      setClasses(populatedClasses);
+      setTeachers(teacherList);
+      setAllStudents(studentList);
+      
+      // If a class is selected, update its details
+      if(selectedClass) {
+        const updatedSelectedClass = populatedClasses.find((c: Class) => c.id === selectedClass.id);
+        if(updatedSelectedClass) {
+          setSelectedClass(updatedSelectedClass);
         }
-      ];
-      setClasses(initialClasses);
-      localStorage.setItem('studylink_classes', JSON.stringify(initialClasses));
-    }
+      }
 
-    if (savedTeachers) {
-      setTeachers(JSON.parse(savedTeachers));
-    } else {
-      const initialTeachers: Teacher[] = [
-        { id: 1, name: '김선생', username: 'teacher1', subject: '물리' },
-        { id: 2, name: '이선생', username: 'teacher2', subject: '화학' },
-        { id: 3, name: '박선생', username: 'teacher3', subject: '생물' }
-      ];
-      setTeachers(initialTeachers);
-      localStorage.setItem('studylink_teachers', JSON.stringify(initialTeachers));
-    }
-
-    if (savedStudents) {
-      setAllStudents(JSON.parse(savedStudents));
-    } else {
-      const initialStudents: Student[] = [];
-      setAllStudents(initialStudents);
-      localStorage.setItem('studylink_students', JSON.stringify(initialStudents));
+    } catch (error) {
+      console.error("Failed to load class management data:", error);
     }
   };
 
@@ -144,206 +127,166 @@ const EnhancedClassManagement: React.FC<EnhancedClassManagementProps> = ({ onBac
     window.dispatchEvent(new Event('localStorageChanged'));
   };
 
-  const createClass = () => {
+  const createClass = async () => {
     if (!newClass.name || !newClass.grade || !newClass.subject || newClass.teacherIds.length === 0) {
       alert('모든 필드를 입력하고 최소 1명의 교사를 선택해주세요.');
       return;
     }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/api/admin/classes', {
+        ...newClass,
+        teacher_ids: newClass.teacherIds.map(id => parseInt(id))
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    const selectedTeachers = teachers.filter(t => newClass.teacherIds.includes(String(t.id)));
-    if (selectedTeachers.length === 0) {
-      alert('선택한 교사를 찾을 수 없습니다.');
-      return;
+      if (response.status === 201) {
+        alert('반이 생성되었습니다.');
+        setShowCreateForm(false);
+        setNewClass({ name: '', grade: '', subject: '', teacherIds: [], maxStudents: 20, schedule: '' });
+        loadData();
+      } else {
+        alert('반 생성에 실패했습니다.');
+      }
+    } catch(e) {
+      console.error("Failed to create class:", e);
+      alert('반 생성 중 오류가 발생했습니다.');
     }
-
-    const newClassData: Class = {
-      id: classes.length > 0 ? Math.max(...classes.map(c => c.id)) + 1 : 1,
-      name: newClass.name,
-      grade: newClass.grade,
-      subject: newClass.subject,
-      teacherIds: selectedTeachers.map(t => t.id),
-      teacherNames: selectedTeachers.map(t => t.name),
-      students: [],
-      maxStudents: newClass.maxStudents,
-      schedule: newClass.schedule,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    saveClasses([...classes, newClassData]);
-    setNewClass({ name: '', grade: '', subject: '', teacherIds: [], maxStudents: 20, schedule: '' });
-    setShowCreateForm(false);
-    alert('반이 생성되었습니다.');
   };
 
-  const updateClass = () => {
+  const updateClass = async () => {
     if (!editingClass) return;
 
-    // Get selected teachers
-    const selectedTeachers = teachers.filter(t => editingClass.teacherIds?.includes(t.id));
-    if (selectedTeachers.length === 0) {
-      alert('최소 1명의 교사를 선택해주세요.');
-      return;
-    }
+    try {
+        const token = localStorage.getItem('token');
+        const response = await axios.put(`/api/admin/classes/${editingClass.id}`, {
+            ...editingClass,
+            teacher_ids: editingClass.teacherIds.map(id => parseInt(String(id)))
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
 
-    const updatedClass = {
-      ...editingClass,
-      teacherNames: selectedTeachers.map(t => t.name)
-    };
-
-    const updatedClasses = classes.map(c => 
-      c.id === editingClass.id ? updatedClass : c
-    );
-    saveClasses(updatedClasses);
-    
-    if (selectedClass?.id === editingClass.id) {
-      setSelectedClass(updatedClass);
-    }
-    
-    setEditingClass(null);
-    setShowEditModal(false);
-    alert('반 정보가 수정되었습니다.');
-  };
-
-  const deleteClass = (classId: number) => {
-    if (confirm('정말 이 반을 삭제하시겠습니까? 소속 학생들은 반 배정이 해제됩니다.')) {
-      // 학생들의 반 배정 해제
-      const updatedStudents = allStudents.map(s => 
-        s.classId === classId ? { ...s, classId: 0, className: undefined } : s
-      );
-      saveStudents(updatedStudents);
-
-      // 반 삭제
-      const updatedClasses = classes.filter(c => c.id !== classId);
-      saveClasses(updatedClasses);
-      
-      if (selectedClass?.id === classId) {
-        setSelectedClass(null);
-      }
-      
-      alert('반이 삭제되었습니다.');
-    }
-  };
-
-  const addStudentToClass = () => {
-    if (!selectedClass || !newStudent.name || !newStudent.username) {
-      alert('학생 정보를 모두 입력해주세요.');
-      return;
-    }
-
-    if (selectedClass.students.length >= selectedClass.maxStudents) {
-      alert(`이 반의 최대 학생 수(${selectedClass.maxStudents}명)에 도달했습니다.`);
-      return;
-    }
-
-    const newStudentData: Student = {
-      id: allStudents.length > 0 ? Math.max(...allStudents.map(s => s.id)) + 1 : 1,
-      name: newStudent.name,
-      username: newStudent.username,
-      email: newStudent.email,
-      phone: newStudent.phone,
-      classId: selectedClass.id,
-      className: selectedClass.name
-    };
-
-    // 전체 학생 목록에 추가
-    const updatedAllStudents = [...allStudents, newStudentData];
-    saveStudents(updatedAllStudents);
-
-    // 반 정보 업데이트
-    const updatedClasses = classes.map(c => {
-      if (c.id === selectedClass.id) {
-        return {
-          ...c,
-          students: [...c.students, newStudentData]
-        };
-      }
-      return c;
-    });
-    saveClasses(updatedClasses);
-
-    // students localStorage 업데이트
-    const studentsData = JSON.parse(localStorage.getItem('students') || '[]');
-    const studentExists = studentsData.find((s: any) => s.username === newStudent.username);
-    
-    if (studentExists) {
-      // 기존 학생이면 반 정보만 업데이트
-      const updatedStudentsData = studentsData.map((s: any) => {
-        if (s.id === studentExists.id) {
-          const currentClassIds = s.classIds || [];
-          const currentClassNames = s.classNames || [];
-          if (!currentClassIds.includes(selectedClass.id)) {
-            currentClassIds.push(selectedClass.id);
-            currentClassNames.push(selectedClass.name);
-          }
-          return { ...s, classIds: currentClassIds, classNames: currentClassNames };
+        if (response.status === 200) {
+            alert('반 정보가 수정되었습니다.');
+            setShowEditModal(false);
+            setEditingClass(null);
+            loadData();
+        } else {
+            alert('반 정보 수정에 실패했습니다.');
         }
-        return s;
-      });
-      localStorage.setItem('students', JSON.stringify(updatedStudentsData));
-    } else {
-      // 새 학생이면 추가
-      studentsData.push({
-        ...newStudentData,
-        classIds: [selectedClass.id],
-        classNames: [selectedClass.name],
-        status: 'active',
-        createdAt: new Date().toISOString().split('T')[0]
-      });
-      localStorage.setItem('students', JSON.stringify(studentsData));
-      
-      // users에도 추가 (로그인 가능하게)
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      users.push({
-        id: newStudentData.id,
-        username: newStudent.username,
-        password: '1234', // 기본 비밀번호
-        name: newStudent.name,
-        role: 'student',
-        status: 'active'
-      });
-      localStorage.setItem('users', JSON.stringify(users));
+    } catch (error) {
+        console.error('Error updating class:', error);
+        alert('반 정보 수정 중 오류가 발생했습니다.');
     }
-
-    // 선택된 반 업데이트
-    setSelectedClass({
-      ...selectedClass,
-      students: [...selectedClass.students, newStudentData]
-    });
-
-    setNewStudent({ name: '', username: '', email: '', phone: '' });
-    setShowAddStudentModal(false);
-    alert('학생이 추가되었습니다.');
   };
 
-  const removeStudentFromClass = (studentId: number) => {
+  const deleteClass = async (classId: number) => {
+    if (confirm('정말 이 반을 삭제하시겠습니까? 소속 학생들은 반 배정이 해제됩니다.')) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.delete(`/api/admin/classes/${classId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (response.status === 200) {
+          alert('반이 삭제되었습니다.');
+          if (selectedClass?.id === classId) {
+            setSelectedClass(null);
+          }
+          loadData();
+        } else {
+          alert('반 삭제에 실패했습니다.');
+        }
+      } catch (error) {
+        console.error('Error deleting class:', error);
+        alert('반 삭제 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
+  const addStudentToClass = async () => {
+    if (!selectedClass) return;
+
+    let studentIdToAdd: number | null = null;
+
+    if (newStudent.isNewStudent) {
+        // Create new student first
+        if (!newStudent.name || !newStudent.username) {
+            alert('새 학생의 이름과 아이디를 입력해주세요.');
+            return;
+        }
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.post('/api/admin/users', {
+                name: newStudent.name,
+                username: newStudent.username,
+                email: newStudent.email,
+                phone: newStudent.phone,
+                role: 'student',
+                password: 'password123' // default password
+            }, { headers: { Authorization: `Bearer ${token}` }});
+            
+            if (response.status === 201) {
+                studentIdToAdd = response.data.user.id;
+            } else {
+                alert('학생 생성에 실패했습니다.');
+                return;
+            }
+        } catch(e) {
+            alert('학생 생성 중 오류가 발생했습니다.');
+            return;
+        }
+    } else {
+        studentIdToAdd = newStudent.selectedStudentId;
+    }
+    
+    if (!studentIdToAdd) {
+        alert('추가할 학생을 선택해주세요.');
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('token');
+        const response = await axios.post(`/api/admin/classes/${selectedClass.id}/students`, {
+            student_ids: [studentIdToAdd]
+        }, { headers: { Authorization: `Bearer ${token}` } });
+
+        if (response.status === 200) {
+            alert('학생이 반에 추가되었습니다.');
+            setShowAddStudentModal(false);
+            setNewStudent({ name: '', username: '', email: '', phone: '', isNewStudent: true, selectedStudentId: null });
+            loadData();
+        } else {
+            alert('학생 추가에 실패했습니다.');
+        }
+
+    } catch (e) {
+        alert('학생 추가 중 오류가 발생했습니다.');
+    }
+  };
+
+  const removeStudentFromClass = async (studentId: number) => {
     if (!selectedClass) return;
     
     if (confirm('이 학생을 반에서 제외하시겠습니까?')) {
-      // 학생의 반 배정 해제
-      const updatedAllStudents = allStudents.map(s => 
-        s.id === studentId ? { ...s, classId: 0, className: undefined } : s
-      );
-      saveStudents(updatedAllStudents);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await axios.delete(`/api/admin/classes/${selectedClass.id}/students`, {
+                headers: { Authorization: `Bearer ${token}` },
+                data: { student_ids: [studentId] }
+            });
 
-      // 반에서 학생 제거
-      const updatedClasses = classes.map(c => {
-        if (c.id === selectedClass.id) {
-          return {
-            ...c,
-            students: c.students.filter(s => s.id !== studentId)
-          };
+            if(response.status === 200) {
+                alert('학생이 반에서 제외되었습니다.');
+                loadData();
+            } else {
+                alert('학생 제외에 실패했습니다.');
+            }
+        } catch (e) {
+            alert('학생 제외 중 오류가 발생했습니다.');
         }
-        return c;
-      });
-      saveClasses(updatedClasses);
-
-      // 선택된 반 업데이트
-      setSelectedClass({
-        ...selectedClass,
-        students: selectedClass.students.filter(s => s.id !== studentId)
-      });
-
-      alert('학생이 반에서 제외되었습니다.');
     }
   };
 

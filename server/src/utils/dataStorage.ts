@@ -76,6 +76,47 @@ export interface LectureContent {
   created_at: string;
 }
 
+export interface Quiz {
+  id: number;
+  lecture_id: number;
+  title: string;
+  quiz_type: 'ox' | 'multiple_choice';
+  created_at: string;
+}
+
+export interface Question {
+  id: number;
+  quiz_id: number;
+  question_text: string;
+  question_type: 'ox' | 'multiple_choice';
+  order_index: number;
+}
+
+export interface Choice {
+  id: number;
+  question_id: number;
+  choice_text: string;
+  is_correct: boolean;
+}
+
+export interface StudentQuizAttempt {
+  id: number;
+  student_id: number;
+  quiz_id: number;
+  score: number | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export interface StudentAnswer {
+  id: number;
+  attempt_id: number;
+  question_id: number;
+  chosen_choice_id: number;
+  is_correct: boolean;
+}
+
+
 // 기본 사용자 데이터
 const defaultUsers: SimpleUser[] = [
   {
@@ -297,4 +338,118 @@ export function saveLectureContents(contents: LectureContent[]): void {
   } catch (error) {
     console.error('Error saving lecture contents:', error);
   }
+}
+
+export function loadQuizzes(): Quiz[] {
+  try {
+    if (fs.existsSync(path.join(DATA_DIR, 'quizzes.json'))) {
+      const data = fs.readFileSync(path.join(DATA_DIR, 'quizzes.json'), 'utf8');
+      return JSON.parse(data);
+    } else {
+      return [];
+    }
+  } catch (error) {
+    console.error('Error loading quizzes:', error);
+    return [];
+  }
+}
+
+export function saveQuizzes(quizzes: Quiz[]): void {
+  try {
+    fs.writeFileSync(path.join(DATA_DIR, 'quizzes.json'), JSON.stringify(quizzes, null, 2));
+  } catch (error) {
+    console.error('Error saving quizzes:', error);
+  }
+}
+
+export function loadQuestions(): Question[] {
+  try {
+    if (fs.existsSync(path.join(DATA_DIR, 'questions.json'))) {
+      const data = fs.readFileSync(path.join(DATA_DIR, 'questions.json'), 'utf8');
+      return JSON.parse(data);
+    } else {
+      return [];
+    }
+  } catch (error) {
+    console.error('Error loading questions:', error);
+    return [];
+  }
+}
+
+export function saveQuestions(questions: Question[]): void {
+  try {
+    fs.writeFileSync(path.join(DATA_DIR, 'questions.json'), JSON.stringify(questions, null, 2));
+  } catch (error) {
+    console.error('Error saving questions:', error);
+  }
+}
+
+export function loadChoices(): Choice[] {
+  try {
+    if (fs.existsSync(path.join(DATA_DIR, 'choices.json'))) {
+      const data = fs.readFileSync(path.join(DATA_DIR, 'choices.json'), 'utf8');
+      return JSON.parse(data);
+    } else {
+      return [];
+    }
+  } catch (error) {
+    console.error('Error loading choices:', error);
+    return [];
+  }
+}
+
+export function saveChoices(choices: Choice[]): void {
+  try {
+    fs.writeFileSync(path.join(DATA_DIR, 'choices.json'), JSON.stringify(choices, null, 2));
+  } catch (error) {
+    console.error('Error saving choices:', error);
+  }
+}
+
+export function loadStudentQuizAttempts(): StudentQuizAttempt[] {
+  try {
+    if (fs.existsSync(path.join(DATA_DIR, 'student_quiz_attempts.json'))) {
+      const data = fs.readFileSync(path.join(DATA_DIR, 'student_quiz_attempts.json'), 'utf8');
+      return JSON.parse(data);
+    } else {
+      return [];
+    }
+  } catch (error) {
+    console.error('Error loading student quiz attempts:', error);
+    return [];
+  }
+}
+
+export function saveStudentQuizAttempts(attempts: StudentQuizAttempt[]): void {
+  try {
+    fs.writeFileSync(path.join(DATA_DIR, 'student_quiz_attempts.json'), JSON.stringify(attempts, null, 2));
+  } catch (error) {
+    console.error('Error saving student quiz attempts:', error);
+  }
+}
+
+export function loadStudentAnswers(): StudentAnswer[] {
+  try {
+    if (fs.existsSync(path.join(DATA_DIR, 'student_answers.json'))) {
+      const data = fs.readFileSync(path.join(DATA_DIR, 'student_answers.json'), 'utf8');
+      return JSON.parse(data);
+    } else {
+      return [];
+    }
+  } catch (error) {
+    console.error('Error loading student answers:', error);
+    return [];
+  }
+}
+
+export function saveStudentAnswers(answers: StudentAnswer[]): void {
+  try {
+    fs.writeFileSync(path.join(DATA_DIR, 'student_answers.json'), JSON.stringify(answers, null, 2));
+  } catch (error) {
+    console.error('Error saving student answers:', error);
+  }
+}
+
+export function generateId(): number {
+  return Date.now() + Math.floor(Math.random() * 1000);
 }

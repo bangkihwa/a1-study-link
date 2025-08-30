@@ -85,6 +85,69 @@ interface ClassSchedule {
   room?: string;
 }
 
+export interface Class {
+  id: number;
+  name: string;
+  grade: string;
+  subject: string;
+  teacherIds: number[];
+  teacherNames?: string[];
+  students: any[];
+  studentIds?: number[];
+  maxStudents: number;
+  schedule?: string;
+  createdAt: string;
+}
+
+export interface User {
+  id: number;
+  username: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  role: 'admin' | 'teacher' | 'student' | 'parent';
+  password?: string;
+  is_approved?: boolean;
+  status?: 'active' | 'pending' | 'suspended';
+  created_at?: string;
+  updated_at?: string;
+  classIds?: number[];
+  classNames?: string[];
+}
+
+export interface StudentQuizAttempt {
+  id: number;
+  student_id: number;
+  quiz_id: number;
+  score: number | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+export interface Quiz {
+  id: number;
+  lecture_id: number;
+  title: string;
+  quiz_type: 'ox' | 'multiple_choice';
+  created_at: string;
+}
+
+export interface Choice {
+  id?: number;
+  choice_text: string;
+  is_correct: boolean;
+}
+
+export interface Question {
+  id?: number;
+  quiz_id?: number;
+  question_text: string;
+  question_type: 'ox' | 'multiple_choice';
+  order_index?: number;
+  choices: Choice[];
+}
+
+
 // 강의 데이터 관리
 export const saveLectures = (lectures: Lecture[]): void => {
   try {
@@ -421,6 +484,46 @@ export const loadSchedules = (): ClassSchedule[] => {
     console.error('Failed to load schedules:', error);
     return [];
   }
+};
+
+export const loadClasses = (): Class[] => {
+  const data = localStorage.getItem('studylink_classes');
+  return data ? JSON.parse(data) : [];
+};
+
+export const saveClasses = (classes: Class[]): void => {
+  localStorage.setItem('studylink_classes', JSON.stringify(classes));
+  window.dispatchEvent(new Event('localStorageChanged'));
+};
+
+export const loadUsers = (): User[] => {
+  const data = localStorage.getItem('users');
+  return data ? JSON.parse(data) : [];
+};
+
+export const saveUsers = (users: User[]): void => {
+  localStorage.setItem('users', JSON.stringify(users));
+  window.dispatchEvent(new Event('localStorageChanged'));
+};
+
+export const loadStudentQuizAttempts = (): StudentQuizAttempt[] => {
+  const data = localStorage.getItem('studylink_student_quiz_attempts');
+  return data ? JSON.parse(data) : [];
+};
+
+export const saveStudentQuizAttempts = (attempts: StudentQuizAttempt[]): void => {
+  localStorage.setItem('studylink_student_quiz_attempts', JSON.stringify(attempts));
+  window.dispatchEvent(new Event('localStorageChanged'));
+};
+
+export const loadQuizzes = (): Quiz[] => {
+  const data = localStorage.getItem('studylink_quizzes');
+  return data ? JSON.parse(data) : [];
+};
+
+export const saveQuizzes = (quizzes: Quiz[]): void => {
+  localStorage.setItem('studylink_quizzes', JSON.stringify(quizzes));
+  window.dispatchEvent(new Event('localStorageChanged'));
 };
 
 // 유틸리티 함수

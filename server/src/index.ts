@@ -7,8 +7,10 @@ import subjectRoutes from './routes/subjects';
 // import adminRoutes from './routes/admin';
 // import teacherRoutes from './routes/teacher';
 // import studentRoutes from './routes/student';
-// import parentRoutes from './routes/parent';
-// import reportsRoutes from './routes/reports';
+import parentRoutes from './routes/parent';
+import reportsRoutes from './routes/reports';
+import quizRoutes from './routes/quiz';
+import analyticsRoutes from './routes/analytics';
 
 dotenv.config();
 
@@ -27,8 +29,10 @@ app.use('/api/subjects', subjectRoutes);
 // app.use('/api/admin', adminRoutes);
 // app.use('/api/teacher', teacherRoutes);
 // app.use('/api/student', studentRoutes);
-// app.use('/api/parent', parentRoutes);
-// app.use('/api/reports', reportsRoutes);
+app.use('/api/parent', parentRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/quizzes', quizRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // 임시 학생 대시보드 API
 app.get('/api/student/dashboard', (req, res) => {

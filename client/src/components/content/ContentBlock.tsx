@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LectureContent, CONTENT_TYPE_LABELS } from '../../types';
 import { 
   PlayIcon, 
@@ -25,6 +25,42 @@ const ContentBlock: React.FC<ContentBlockProps> = ({
   const [showDetails, setShowDetails] = useState(false);
   const [testScore, setTestScore] = useState<number | undefined>();
   const [isCompleting, setIsCompleting] = useState(false);
+  const startTimeRef = useRef<Date | null>(null);
+
+  useEffect(() => {
+    if (showDetails && isStudent) {
+      startTimeRef.current = new Date();
+    } else if (!showDetails && isStudent && startTimeRef.current) {
+      logActivity('content_view');
+      startTimeRef.current = null;
+    }
+
+    return () => {
+      if (isStudent && startTimeRef.current) {
+        logActivity('content_view');
+      }
+    };
+  }, [showDetails, isStudent]);
+
+  const logActivity = (activityType: string) => {
+    if (!startTimeRef.current) return;
+    const duration_seconds = Math.round((new Date().getTime() - startTimeRef.current.getTime()) / 1000);
+    const studentId = JSON.parse(localStorage.getItem('currentUser') || '{}').id;
+    
+    // In a real app, this would be an API call
+    const studentActivities = JSON.parse(localStorage.getItem('student_activities') || '[]');
+    studentActivities.push({
+      student_id: studentId,
+      lecture_id: content.lecture_id,
+      content_id: content.id,
+      activity_type: activityType,
+      duration_seconds: duration_seconds,
+      details: { title: content.title },
+      timestamp: new Date().toISOString()
+    });
+    localStorage.setItem('student_activities', JSON.stringify(studentActivities));
+    console.log(`Logged activity: ${activityType} for ${duration_seconds}s`);
+  };
 
   const getIcon = () => {
     switch (content.type) {
@@ -213,7 +249,10 @@ const ContentBlock: React.FC<ContentBlockProps> = ({
                 
                 {!content.is_completed && (
                   <button
-                    onClick={handleComplete}
+                    onClick={() => {
+                      handleComplete();
+                      logActivity('content_completed');
+                    }}
                     disabled={isCompleting}
                     className="btn-primary text-sm"
                   >
