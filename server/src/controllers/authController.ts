@@ -87,15 +87,21 @@ export const login = async (req: Request, res: Response) => {
     const { username, password } = req.body;
     
     // 최신 사용자 데이터 로드
+    console.log('Attempting login for user:', username);
     const users = loadUsers();
+    console.log(`Loaded ${users.length} users.`);
 
     const user = users.find(u => u.username === username);
     if (!user) {
+      console.log('User not found:', username);
       return res.status(401).json({ error: '잘못된 사용자명 또는 비밀번호입니다.' });
     }
+    console.log('User found:', user.username, 'Hashed password from DB:', user.password_hash);
 
     const isValidPassword = await comparePassword(password, user.password_hash);
+    console.log('Password validation result:', isValidPassword);
     if (!isValidPassword) {
+      console.log('Password mismatch for user:', username);
       return res.status(401).json({ error: '잘못된 사용자명 또는 비밀번호입니다.' });
     }
 

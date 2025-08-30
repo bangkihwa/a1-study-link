@@ -6,6 +6,17 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Load data using fs to avoid issues with module resolution in compiled JS
+const loadJSON = (filename: string) => {
+  const filePath = path.join(__dirname, '../../data', filename);
+  if (fs.existsSync(filePath)) {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  }
+  return [];
+};
+
+const usersData = loadJSON('users.json');
+
 interface MemoryDatabase {
   users: (User & { password_hash: string })[];
   classes: Class[];
@@ -18,76 +29,38 @@ interface MemoryDatabase {
 
 class MemoryDb {
   private db: MemoryDatabase = {
-    users: [
-      {
-        id: 1,
-        username: 'admin',
-        email: 'admin@a1science.com',
-        password_hash: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdyJE.BQRs.X9ZS', // password: admin123
-        role: 'admin',
-        name: '관리자',
-        phone: '010-1234-5678',
-        is_approved: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: 2,
-        username: 'teacher1',
-        email: 'teacher1@a1science.com',
-        password_hash: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdyJE.BQRs.X9ZS', // password: admin123
-        role: 'teacher',
-        name: '김선생님',
-        phone: '010-2345-6789',
-        is_approved: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: 3,
-        username: 'student1',
-        email: 'student1@example.com',
-        password_hash: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdyJE.BQRs.X9ZS', // password: admin123
-        role: 'student',
-        name: '홍길동',
-        phone: '010-3456-7890',
-        is_approved: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: 4,
-        username: 'parent1',
-        email: 'parent1@example.com',
-        password_hash: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdyJE.BQRs.X9ZS', // password: admin123
-        role: 'parent',
-        name: '홍길동부모',
-        phone: '010-4567-8901',
-        is_approved: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-    ],
-    classes: [
-      {
-        id: 1,
-        name: '중등3 물리반',
-        subject: 'physics',
-        teacher_id: 2,
-        description: '중학교 3학년 물리 과목',
-        created_at: new Date().toISOString()
-      }
-    ],
+    users: usersData.map((u: any) => ({ ...u, role: u.role as UserRole })),
+    classes: [],
     lectures: [],
     lecture_contents: [],
     student_questions: [],
-    class_students: [
-      { class_id: 1, student_id: 3 }
-    ],
-    parent_students: [
-      { parent_id: 4, student_id: 3 }
-    ]
+    class_students: [],
+    parent_students: [],
   };
+
+  constructor() {
+    this.loadDataFromFiles();
+  }
+
+  private loadDataFromFiles() {
+    try {
+      this.db.classes = loadJSON('classes.json');
+      this.db.lectures = loadJSON('lectures.json');
+      this.db.lecture_contents = loadJSON('lecture_contents.json');
+      this.db.class_students = loadJSON('enrollments.json');
+    } catch (e) {
+      console.error("Error loading data files for MemoryDb", e);
+    }
+  }
+
+  private saveData(filename: string, data: any) {
+    try {
+      fs.writeFileSync(filename, JSON.stringify(data, null, 2));
+      console.log(`Data saved to ${filename}`);
+    } catch (e) {
+      console.error(`Error saving data to ${filename}`, e);
+    }
+  }
 
   // 사용자 관련 쿼리
   async findUserByUsername(username: string) {

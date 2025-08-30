@@ -12,10 +12,17 @@
     "build:server": "cd server && npm run build",
     "start": "cd server && npm start"
   },
-  "keywords": ["education", "learning", "science"],
+  "keywords": [
+    "education",
+    "learning",
+    "science"
+  ],
   "author": "A1 Science Academy",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2"
   }
 }
