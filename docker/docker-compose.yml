@@ -1,0 +1,86 @@
+services:
+  nginx:
+    platform: linux/amd64
+    image: public.ecr.aws/docker/library/nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=/api
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=/api
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  backend:
+    build: 
+      context: ../backend
+      dockerfile: ../docker/app/Dockerfile
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_HOST=mysql
+      - DB_USER=a1_app
+      - DB_PASSWORD=mysql
+      - DB_NAME=a1_studylink
+      - JWT_SECRET=jwt_secret_change_in_production
+      # 관리자 계정 환경변수 (운영환경에서는 반드시 변경 필요)
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin
+      - ADMIN_NAME=시스템 관리자
+      - ADMIN_EMAIL=admin@a1studylink.com
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    # 내부 포트만 노출 (nginx를 통해서만 접근)
+    expose:
+      - "3001"
+    #테스트시만 활성화
+    ports: 
+      - "3001:3001"
+
+  mysql:
+    platform: linux/amd64
+    image: public.ecr.aws/docker/library/mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=mysql
+      - MYSQL_DATABASE=a1_studylink
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "3306:3306"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pmysql"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 40s
+
+  redis:
+    image: public.ecr.aws/docker/library/redis:alpine
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
